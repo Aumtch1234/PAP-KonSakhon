@@ -36,7 +36,7 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/server.js ./
 
 # ✅ Copy your config directory (important!)
-COPY --from=builder /app/config ./config
+COPY --from=builder /app/app/config ./config
 
 # ✅ Copy app source (for API routes / edge functions)
 COPY --from=builder /app/app ./app
