@@ -35,8 +35,6 @@ pipeline {
           fi
           
           echo "✅ All required files present"
-          echo "Docker version: $(docker --version)"
-          echo "Docker Compose version: $(docker-compose --version)"
         '''
       }
     }
@@ -85,66 +83,47 @@ pipeline {
     }
 
     stage('Initialize Database Schema') {
-    steps {
-      echo '🌱 Initializing database schema...'
-      sh '''
-        # รอให้ postgres พร้อมแบบสมบูรณ์
-        echo "⏳ Waiting for PostgreSQL to be fully ready..."
-        sleep 15
-        
-        MAX_ATTEMPTS=30
-        ATTEMPT=0
-        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-          if docker exec postgres pg_isready -U postgres > /dev/null 2>&1; then
-            echo "✅ PostgreSQL is responding"
-            break
-          fi
-          ATTEMPT=$((ATTEMPT + 1))
-          sleep 1
-        done
-        
-        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-          echo "❌ PostgreSQL failed to start!"
-          docker logs postgres
-          exit 1
-        fi
-        
-        # ตรวจสอบ database WEB_APP มีอยู่หรือไม่
-        if docker exec postgres psql -U postgres -lqt | cut -d \| -f 1 | grep -qw WEB_APP; then
-          echo "✅ Database WEB_APP exists"
-        else
-          echo "⚠️  Database WEB_APP not found, creating..."
-          docker exec postgres psql -U postgres -c "CREATE DATABASE WEB_APP;" || true
-        fi
-        
-        # Import SQL
-        if [ -f "DB/init.sql" ]; then
-          echo "📦 Importing DB/init.sql ($(wc -l < DB/init.sql) lines)..."
-          docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql
+      steps {
+        echo '🌱 Initializing database schema...'
+        sh '''
+          echo "⏳ Waiting for PostgreSQL to be fully ready..."
+          sleep 10
           
-          if [ $? -eq 0 ]; then
-            echo "✅ Database schema initialized successfully"
+          # ตรวจสอบ database WEB_APP มีอยู่หรือไม่
+          if docker exec postgres psql -U postgres -lqt | cut -d \| -f 1 | grep -qw WEB_APP; then
+            echo "✅ Database WEB_APP exists"
           else
-            echo "❌ Database import failed"
+            echo "⚠️  Database WEB_APP not found, creating..."
+            docker exec postgres psql -U postgres -c "CREATE DATABASE WEB_APP;" || true
+          fi
+          
+          # Import SQL
+          if [ -f "DB/init.sql" ]; then
+            echo "📦 Importing DB/init.sql ($(wc -l < DB/init.sql) lines)..."
+            docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ Database schema initialized successfully"
+            else
+              echo "❌ Database import failed"
+              exit 1
+            fi
+            
+            # Verify tables
+            echo "📋 Database tables:"
+            docker exec postgres psql -U postgres -d WEB_APP -c "\\dt"
+          else
+            echo "❌ DB/init.sql not found!"
             exit 1
           fi
-          
-          # Verify tables
-          echo "📋 Database tables:"
-          docker exec postgres psql -U postgres -d WEB_APP -c "\\dt"
-        else
-          echo "❌ DB/init.sql not found!"
-          exit 1
-        fi
-      '''
+        '''
+      }
     }
-  }
 
     stage('Seed Initial Data (Optional)') {
       steps {
         echo '🌾 Seeding initial data...'
         sh '''
-          # Optional: Check if seed data file exists
           if [ -f "DB/seed.sql" ]; then
             echo "📦 Importing seed data..."
             docker exec -i postgres psql -U postgres -d WEB_APP < DB/seed.sql
@@ -168,17 +147,6 @@ pipeline {
           fi
           
           echo "✅ Build completed successfully"
-          docker images | grep -E "REPOSITORY|$PROJECT_NAME|postgres|pgadmin" || true
-        '''
-      }
-    }
-
-    stage('Stop Database Temporarily') {
-      steps {
-        echo '⏸️ Stopping database for full compose up...'
-        sh '''
-          docker-compose -f $DOCKER_COMPOSE down
-          sleep 2
         '''
       }
     }
@@ -187,6 +155,11 @@ pipeline {
       steps {
         echo '🚀 Starting all services...'
         sh '''
+          # Stop only app services, keep postgres running with data
+          docker-compose -f $DOCKER_COMPOSE stop pgadmin nextjs || true
+          docker-compose -f $DOCKER_COMPOSE rm -f pgadmin nextjs || true
+          
+          # Start all services (postgres already running with data)
           docker-compose -f $DOCKER_COMPOSE up -d
           
           echo "⏳ Waiting for services to start..."
@@ -255,13 +228,14 @@ pipeline {
       steps {
         echo '✅ Verifying application...'
         sh '''
-          echo "=== Container Logs (Last 30 lines) ==="
+          echo "=== Application Status ==="
+          echo "Next.js: http://localhost:3000"
+          echo "PgAdmin: http://localhost:8081"
+          echo ""
           
+          echo "Container Logs (Last 20 lines):"
           echo "--- Next.js ---"
-          docker logs --tail=30 nextjs 2>&1 | head -30 || true
-          
-          echo "--- PostgreSQL ---"
-          docker logs --tail=30 postgres 2>&1 | head -30 || true
+          docker logs --tail=20 nextjs 2>&1 || true
         '''
       }
     }
@@ -278,9 +252,9 @@ pipeline {
       echo '❌ Pipeline failed!'
       sh '''
         echo "=== Debug Information ==="
-        docker ps -a || true
-        echo "=== Docker Logs ==="
-        docker-compose -f $DOCKER_COMPOSE logs --tail=50 || true
+        docker ps -a
+        echo "=== Last Docker Logs ==="
+        docker-compose -f $DOCKER_COMPOSE logs --tail=100 || true
       '''
     }
     always {
