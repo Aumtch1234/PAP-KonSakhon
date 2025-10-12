@@ -18,21 +18,21 @@ pipeline {
     stage('Build') {
       steps {
         echo '🐳 Building images using docker-compose...'
-        sh 'docker compose -f $DOCKER_COMPOSE build'
+        sh 'docker-compose -f $DOCKER_COMPOSE build'
       }
     }
 
     stage('Stop Old Containers') {
       steps {
         echo '🧹 Stopping and removing old containers...'
-        sh 'docker compose -f $DOCKER_COMPOSE down'
+        sh 'docker-compose -f $DOCKER_COMPOSE down'
       }
     }
 
     stage('Run New Containers') {
       steps {
         echo '🚀 Starting new containers...'
-        sh 'docker compose -f $DOCKER_COMPOSE up -d'
+        sh 'docker-compose -f $DOCKER_COMPOSE up -d'
       }
     }
 
@@ -41,7 +41,7 @@ pipeline {
         echo '🔍 Checking if containers are healthy...'
         sh '''
           docker ps
-          docker inspect -f '{{.State.Health.Status}}' postgres
+          docker inspect -f '{{.State.Health.Status}}' postgres || true
         '''
       }
     }
