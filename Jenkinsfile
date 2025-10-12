@@ -35,8 +35,8 @@ pipeline {
 
     stage('Run New Containers') {
       steps {
-        echo '🚀 Starting new containers...'
-        // ใช้ set +e เพื่อไม่ให้ Jenkins ล้มเมื่อ container unhealthy
+        echo '🚀 Starting all containers...'
+        // ใช้ set +e เพื่อไม่ให้ Jenkins fail ทันทีถ้ามี unhealthy container
         sh '''
           set +e
           docker-compose -f $DOCKER_COMPOSE up -d
@@ -62,6 +62,22 @@ pipeline {
         '''
       }
     }
+
+    stage('Deploy Web App') {
+      steps {
+        echo '🌐 Deploying Next.js container...'
+        sh '''
+          # ถ้ายังไม่มี nextjs container ให้รันใหม่
+          if [ "$(docker ps -q -f name=nextjs)" = "" ]; then
+            echo "🚀 Starting Next.js web app..."
+            docker-compose up -d nextjs
+          else
+            echo "✅ Next.js already running."
+          fi
+          docker ps --filter "name=nextjs"
+        '''
+      }
+    }
   }
 
   post {
@@ -72,8 +88,8 @@ pipeline {
       echo '❌ Build failed or container setup error!'
     }
     always {
-      echo '📦 Cleaning unused Docker resources...'
-      sh 'docker system prune -f || true'
+      echo '🧹 Cleaning Docker build cache only (keep containers alive)...'
+      sh 'docker builder prune -f || true'
     }
   }
 }
