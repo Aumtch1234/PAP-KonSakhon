@@ -41,18 +41,15 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./app:/app/app:delegated
-      - ./public:/app/public:delegated
-      - ./.env:/app/.env:ro
-      # ✅ Mount config files ที่จำเป็น
-      - ./next.config.mjs:/app/next.config.mjs:ro
-      - ./postcss.config.mjs:/app/postcss.config.mjs:ro
-      - ./jsconfig.json:/app/jsconfig.json:ro
+      - .:/app        # ✅ mount ทั้งโปรเจกต์ root
+      - /app/node_modules  # ❗ ป้องกันไม่ให้ทับ node_modules ของ container
     command: sh -c "npm run dev"
     environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
       DATABASE_URL: postgresql://postgres:root@postgres:5432/WEB_APP
       JWT_SECRET: pap1585
-      NODE_ENV: development
     depends_on:
       postgres:
         condition: service_healthy
