@@ -8,7 +8,7 @@ import FeedPost from '../components/Feed/page';
 import CommentDialog from '../components/CommentDialog/page';
 import ProfileEditDialog from '../components/ProfileEdit/page';
 import ProfileSidebar from '../components/ProfileSidebar/page';
-import ChatBox from '../components/ChatBox/page';
+import ChatBox from '../components/ChatBox';
 import { SocketProvider } from '../components/SocketProvider';
 
 export default function Dashboard() {
