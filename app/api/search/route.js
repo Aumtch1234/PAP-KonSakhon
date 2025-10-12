@@ -26,7 +26,12 @@ export async function GET(req) {
     );
 
     const postsPromise = pool.query(
-      'SELECT id, user_id, content, image_url, created_at FROM posts WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 20',
+      `SELECT p.id, p.user_id, p.content, p.image_url, p.created_at, 
+              u.name as user_name, u.profile_image as user_profile_image
+       FROM posts p 
+       LEFT JOIN users u ON p.user_id = u.id 
+       WHERE p.content ILIKE $1 
+       ORDER BY p.created_at DESC LIMIT 20`,
       [likeQ]
     );
 

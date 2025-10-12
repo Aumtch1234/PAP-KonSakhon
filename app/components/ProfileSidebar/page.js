@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 
 export default function ProfileSidebar({ 
   user = {}, 
@@ -6,30 +7,18 @@ export default function ProfileSidebar({
   members = [], 
   onEditProfile = () => {} 
 }) {
+  const [imageError, setImageError] = useState(false);
   
   const getProfileImageWithFallback = (user, size = 'w-20 h-20 mx-auto') => {
     return (
       <div className="relative">
-        {user?.profile_image ? (
-          <>
-            <img
-              src={user.profile_image}
-              alt="Profile"
-              className={`${size} rounded-full object-cover border-4 border-white shadow-lg`}
-              onError={(e) => {
-                e.target.style.display = 'none';
-                if (e.target.nextSibling) {
-                  e.target.nextSibling.style.display = 'flex';
-                }
-              }}
-            />
-            <div
-              className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full items-center justify-center text-white font-bold text-xl hidden shadow-lg`}
-              style={{ display: 'none' }}
-            >
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-          </>
+        {user?.profile_image && !imageError ? (
+          <img
+            src={user.profile_image}
+            alt="Profile"
+            className={`${size} rounded-full object-cover border-4 border-white shadow-lg`}
+            onError={() => setImageError(true)}
+          />
         ) : (
           <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg`}>
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}

@@ -11,6 +11,10 @@ export default function CommentDialog({
   const [newComment, setNewComment] = useState('');
   const [loadingComment, setLoadingComment] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // Image upload states
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const getProfileImage = (userData, size = 'w-10 h-10') => {
     if (userData?.profile_image) {
@@ -66,26 +70,58 @@ export default function CommentDialog({
     }
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert('รูปภาพต้องมีขนาดไม่เกิน 5MB');
+        return;
+      }
+      if (!file.type.startsWith('image/')) {
+        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        return;
+      }
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => setImagePreview(e.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
   const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!newComment.trim() || !postId) return;
+    if ((!newComment.trim() && !selectedImage) || !postId) return;
 
     setLoadingComment(true);
     try {
       const token = localStorage.getItem('token');
+      
+      // Create FormData for image upload
+      const formData = new FormData();
+      formData.append('content', newComment || '');
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+
       const response = await fetch(`/api/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ content: newComment })
+        body: formData
       });
 
       if (response.ok) {
         const result = await response.json();
         setComments(prev => [...prev, result?.comment || {}]);
         setNewComment('');
+        setSelectedImage(null);
+        setImagePreview(null);
         onCommentAdded();
       }
     } catch (error) {
@@ -162,9 +198,21 @@ export default function CommentDialog({
                           <p className="font-medium text-sm text-gray-700 mb-1">
                             {comment?.user_name || 'Unknown'}
                           </p>
-                          <p className="text-gray-800 leading-relaxed">
-                            {comment?.content || ''}
-                          </p>
+                          {comment?.content && (
+                            <p className="text-gray-800 leading-relaxed mb-2">
+                              {comment?.content || ''}
+                            </p>
+                          )}
+                          {comment?.image_url && (
+                            <div className="mt-2">
+                              <img
+                                src={comment.image_url}
+                                alt="Comment image"
+                                className="max-w-full h-auto max-h-64 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(comment.image_url, '_blank')}
+                              />
+                            </div>
+                          )}
                         </div>
                         {comment?.user_id === currentUserId && (
                           <button
@@ -221,32 +269,52 @@ export default function CommentDialog({
                   className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none bg-white"
                   rows="2"
                 />
-                <div className="absolute bottom-2 right-2 flex items-center space-x-2">
+              </div>
+              
+              {/* Image Preview */}
+              {imagePreview && (
+                <div className="mt-3 relative">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="max-w-full h-auto max-h-40 rounded-lg border border-gray-200"
+                  />
                   <button
                     type="button"
-                    className="text-gray-400 hover:text-blue-500 transition-colors duration-200"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.5a2.5 2.5 0 100-5H9v5zm0 0H7.5a2.5 2.5 0 100 5H9V10z" />
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                  <button
-                    type="button"
-                    className="text-gray-400 hover:text-blue-500 transition-colors duration-200"
+                </div>
+              )}
+              
+              <div className="flex justify-between items-center mt-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="comment-image-upload"
+                  />
+                  <label
+                    htmlFor="comment-image-upload"
+                    className="text-gray-400 hover:text-blue-500 transition-colors duration-200 cursor-pointer p-1 rounded"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="flex justify-between items-center mt-3">
-                <div className="text-xs text-gray-500">
-                  กด Enter เพื่อส่ง หรือ Shift+Enter เพื่อขึ้นบรรทัดใหม่
+                  </label>
+                  <div className="text-xs text-gray-500">
+                    เพิ่มรูปภาพ (สูงสุด 5MB)
+                  </div>
                 </div>
                 <button
                   type="submit"
-                  disabled={!newComment.trim() || loadingComment}
+                  disabled={(!newComment.trim() && !selectedImage) || loadingComment}
                   className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-all duration-200 text-sm font-medium"
                 >
                   {loadingComment ? (

@@ -23,13 +23,15 @@ export default function SearchResults({ results = { users: [], posts: [] }, quer
             {users.map((u) => (
               <div
                 key={`user-${u.id}`}
-                onClick={() => router.push(`/profile?user=${u.id}`)}
+                onClick={() => router.push(`/profile/${u.id}`)}
                 className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center space-x-3"
               >
                 {u.profile_image ? (
                   <img src={u.profile_image} className="w-8 h-8 rounded-full object-cover" alt={u.name} />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-sm text-white">{u.name?.charAt(0)}</div>
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-sm text-white font-semibold">
+                    {u.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
                 )}
                 <div>
                   <div className="text-sm font-medium text-gray-800">{u.name}</div>
@@ -46,11 +48,11 @@ export default function SearchResults({ results = { users: [], posts: [] }, quer
             {posts.map((p) => (
               <div
                 key={`post-${p.id}`}
-                onClick={() => router.push(`/posts/${p.id}`)}
+                onClick={() => router.push(`/dashboard?highlight=${p.id}`)}
                 className="px-3 py-2 hover:bg-gray-50 cursor-pointer"
               >
                 <div className="text-sm text-gray-800 truncate">{p.content}</div>
-                <div className="text-xs text-gray-500">โพสต์โดย user #{p.user_id} • {new Date(p.created_at).toLocaleString()}</div>
+                <div className="text-xs text-gray-500">โพสต์โดย {p.user_name || `user #${p.user_id}`} • {new Date(p.created_at).toLocaleString()}</div>
               </div>
             ))}
           </div>

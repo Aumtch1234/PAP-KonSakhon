@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import NavBar from '../components/NavBar/page';
 import MembersSidebar from '../components/MembersSidebar/page';
 import CreatePost from '../components/CreatePost/page';
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [feeds, setFeeds] = useState([]);
   const [members, setMembers] = useState([]);
   const [allComments, setAllComments] = useState({});
+  const [highlightedPostId, setHighlightedPostId] = useState(null);
   
   // Chat state
   const [chatBoxOpen, setChatBoxOpen] = useState(false);
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ✅ Memoize functions to use in dependencies
   const preventBack = useCallback(() => {
@@ -140,6 +142,26 @@ export default function Dashboard() {
     };
   }, [router, preventBack, handleLogout, loadFeeds, loadMembers]);
 
+  // Handle highlight parameter from search
+  useEffect(() => {
+    const highlightParam = searchParams.get('highlight');
+    if (highlightParam) {
+      setHighlightedPostId(parseInt(highlightParam));
+      // Scroll to highlighted post after feeds are loaded
+      setTimeout(() => {
+        const element = document.getElementById(`post-${highlightParam}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 1000);
+      
+      // Clear highlight after 5 seconds
+      setTimeout(() => {
+        setHighlightedPostId(null);
+      }, 5000);
+    }
+  }, [searchParams]);
+
   const handleChatOpen = (chatData) => {
     setSelectedChat(chatData || {});
     setChatBoxOpen(true);
@@ -179,18 +201,27 @@ export default function Dashboard() {
             
             <div className="space-y-6">
               {safeFeeds.map((feed) => (
-                <FeedPost
+                <div
                   key={feed?.id}
-                  feed={feed || {}}
-                  user={safeUser}
-                  allComments={allComments}
-                  onDeletePost={loadFeeds}
-                  onLikePost={setFeeds}
-                  onCommentClick={() => {
-                    setSelectedPostId(feed?.id);
-                    setCommentDialogOpen(true);
-                  }}
-                />
+                  id={`post-${feed?.id}`}
+                  className={`transition-all duration-500 ${
+                    highlightedPostId === feed?.id 
+                      ? 'ring-4 ring-blue-300 ring-opacity-75 shadow-xl rounded-xl' 
+                      : ''
+                  }`}
+                >
+                  <FeedPost
+                    feed={feed || {}}
+                    user={safeUser}
+                    allComments={allComments}
+                    onDeletePost={loadFeeds}
+                    onLikePost={setFeeds}
+                    onCommentClick={() => {
+                      setSelectedPostId(feed?.id);
+                      setCommentDialogOpen(true);
+                    }}
+                  />
+                </div>
               ))}
             </div>
           </div>
