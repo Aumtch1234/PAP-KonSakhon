@@ -3,6 +3,7 @@ pipeline {
 
   environment {
     DOCKER_COMPOSE = 'docker-compose.yml'
+    PROJECT_NAME = 'nextjs-app'
   }
 
   stages {
@@ -16,32 +17,42 @@ pipeline {
 
     stage('Build') {
       steps {
-        echo '🐳 Building docker images...'
+        echo '🐳 Building images using docker-compose...'
         sh 'docker-compose -f $DOCKER_COMPOSE build'
       }
     }
 
-    stage('Run Containers') {
+    stage('Stop Old Containers') {
       steps {
-        echo '🚀 Starting containers...'
+        echo '🧹 Stopping and removing old containers...'
+        sh 'docker-compose -f $DOCKER_COMPOSE down'
+      }
+    }
+
+    stage('Run New Containers') {
+      steps {
+        echo '🚀 Starting new containers...'
         sh 'docker-compose -f $DOCKER_COMPOSE up -d'
       }
     }
 
     stage('Health Check') {
       steps {
-        echo '🔍 Checking running containers...'
-        sh 'docker ps'
+        echo '🔍 Checking if containers are healthy...'
+        sh '''
+          docker ps
+          docker inspect -f '{{.State.Health.Status}}' postgres || true
+        '''
       }
     }
   }
 
   post {
     success {
-      echo '✅ Build & Deploy completed successfully!'
+      echo '✅ CI/CD pipeline completed successfully!'
     }
     failure {
-      echo '❌ Build failed!'
+      echo '❌ Build failed or container setup error!'
     }
   }
 }
