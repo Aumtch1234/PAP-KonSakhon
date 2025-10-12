@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: WEB_APP
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./DB/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - appnet
+    # ✅ เพิ่ม healthcheck
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8081:80"
+    depends_on:
+      - postgres
+    networks:
+      - appnet
+
+  nextjs:
+    build: .
+    container_name: nextjs
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+    command: "npm run dev"
+    environment:
+      DATABASE_URL: postgres://postgres:root@postgres:5432/WEB_APP
+    depends_on:
+      postgres:
+        condition: service_healthy  # ✅ รอให้ postgres healthy
+    networks:
+      - appnet
+
+networks:
+  appnet:
+    driver: bridge
+
+volumes:
+  pg_data:
