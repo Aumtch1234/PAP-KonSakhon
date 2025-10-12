@@ -1,114 +1,124 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useSocket } from '../SocketProvider';
 
-export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
+export default function ChatBox({ chatId, chatUser = {}, currentUser = {}, onClose = () => {} }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  
+  const { socket, connected } = useSocket();
 
-  // Mock messages for demonstration
   useEffect(() => {
-    // Add guards to handle undefined chat/user
-    if (!chat?.id || !user?.id) return;
+    if (!socket || !connected || !chatId) return;
 
-    const chatId = chat.id;
-    const chatName = chat.name || 'Chat';
-    const userId = user.id;
-    const userName = user.name || 'User';
+    // Join chat room
+    socket.emit('join_chat', { chatId });
 
-    setMessages([
-      {
-        id: 1,
-        content: 'สวัสดีครับ วันนี้เป็นอย่างไรบ้าง',
-        senderId: chatId,
-        senderName: chatName,
-        timestamp: new Date(Date.now() - 30000),
-        type: 'text'
-      },
-      {
-        id: 2,
-        content: 'สวัสดีครับ สบายดีเลยครับ',
-        senderId: userId,
-        senderName: userName,
-        timestamp: new Date(Date.now() - 25000),
-        type: 'text'
-      },
-      {
-        id: 3,
-        content: 'งานเป็นอย่างไรบ้างครับ',
-        senderId: chatId,
-        senderName: chatName,
-        timestamp: new Date(Date.now() - 20000),
-        type: 'text'
-      },
-      {
-        id: 4,
-        content: 'ยุ่งอยู่เหมือนกันครับ แต่โอเคครับ',
-        senderId: userId,
-        senderName: userName,
-        timestamp: new Date(Date.now() - 15000),
-        type: 'text'
+    // Listen for chat history
+    socket.on('chat_history', (history) => {
+      setMessages(history);
+      scrollToBottom();
+    });
+
+    // Listen for new messages
+    socket.on('new_message', (message) => {
+      setMessages(prev => [...prev, message]);
+      scrollToBottom();
+    });
+
+    // Listen for typing indicators
+    socket.on('user_typing', (data) => {
+      if (data.userId !== currentUser.id) {
+        setIsTyping(true);
       }
-    ]);
-  }, []);
+    });
+
+    socket.on('user_stop_typing', (data) => {
+      if (data.userId !== currentUser.id) {
+        setIsTyping(false);
+      }
+    });
+
+    // Listen for online status (optional enhancement)
+    socket.on('user_online', (data) => {
+      if (data.userId === chatUser.id) {
+        setIsOnline(true);
+      }
+    });
+
+    socket.on('user_offline', (data) => {
+      if (data.userId === chatUser.id) {
+        setIsOnline(false);
+      }
+    });
+
+    return () => {
+      socket.off('chat_history');
+      socket.off('new_message');
+      socket.off('user_typing');
+      socket.off('user_stop_typing');
+      socket.off('user_online');
+      socket.off('user_offline');
+    };
+  }, [socket, connected, chatId, currentUser.id, chatUser.id]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  const handleTyping = () => {
+    if (!socket || !connected) return;
+
+    socket.emit('typing', { chatId });
+
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      socket.emit('stop_typing', { chatId });
+    }, 1000);
   };
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !socket || !connected) return;
 
-    const messageToSend = {
-      id: Date.now(),
-      content: newMessage.trim(),
-      senderId: user.id,
-      senderName: user.name,
-      timestamp: new Date(),
-      type: 'text'
-    };
+    socket.emit('send_message', {
+      chatId,
+      message: newMessage.trim()
+    });
 
-    setMessages(prev => [...prev, messageToSend]);
     setNewMessage('');
-
-    // Auto response simulation
-    setTimeout(() => {
-      setIsTyping(true);
-      setTimeout(() => {
-        const responses = [
-          'ได้ครับ',
-          'เข้าใจแล้วครับ',
-          'โอเคครับ',
-          'ขอบคุณครับ',
-          'ดีครับ'
-        ];
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          content: randomResponse,
-          senderId: chat.id,
-          senderName: chat.name,
-          timestamp: new Date(),
-          type: 'text'
-        }]);
-        setIsTyping(false);
-      }, 1500);
-    }, 500);
+    socket.emit('stop_typing', { chatId });
+    
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
   };
 
-  const getProfileImage = (userId, userName, size = 'w-8 h-8') => {
+  const getProfileImage = (user, size = 'w-8 h-8') => {
+    if (user?.profile_image) {
+      return (
+        <img
+          src={user.profile_image}
+          alt={user.name}
+          className={`${size} rounded-full object-cover`}
+        />
+      );
+    }
     return (
       <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium text-sm`}>
-        {userName?.charAt(0)?.toUpperCase() || 'U'}
+        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
       </div>
     );
   };
@@ -129,10 +139,10 @@ export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              {getProfileImage(chat?.id, chat?.name, 'w-8 h-8')}
+              {getProfileImage(chatUser, 'w-8 h-8')}
               <div className="flex items-center space-x-2">
-                <span className="font-medium text-sm">{chat?.name || 'Chat'}</span>
-                {chat?.online && (
+                <span className="font-medium text-sm">{chatUser?.name || 'Chat'}</span>
+                {(chatUser?.online || isOnline) && (
                   <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 )}
               </div>
@@ -160,11 +170,11 @@ export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
       <div className="p-3 bg-blue-500 text-white rounded-t-lg flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            {getProfileImage(chat?.id, chat?.name, 'w-8 h-8')}
+            {getProfileImage(chatUser, 'w-8 h-8')}
             <div className="flex flex-col">
-              <span className="font-medium text-sm">{chat?.name || 'Chat'}</span>
+              <span className="font-medium text-sm">{chatUser?.name || 'Chat'}</span>
               <div className="flex items-center space-x-1">
-                {chat?.online ? (
+                {(chatUser?.online || isOnline) ? (
                   <>
                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                     <span className="text-xs text-green-200">ออนไลน์</span>
@@ -196,42 +206,63 @@ export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
         </div>
       </div>
 
+      {/* Connection Status */}
+      {!connected && (
+        <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-200 text-yellow-800 text-xs text-center">
+          กำลังเชื่อมต่อ...
+        </div>
+      )}
+
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.senderId === user.id ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`flex max-w-[75%] ${message.senderId === user.id ? 'flex-row-reverse' : 'flex-row'} items-end space-x-2`}>
-              {message.senderId !== user.id && (
-                <div className="flex-shrink-0">
-                  {getProfileImage(message.senderId, message.senderName, 'w-6 h-6')}
-                </div>
-              )}
-              <div>
-                <div
-                  className={`px-3 py-2 rounded-xl text-sm ${
-                    message.senderId === user.id
-                      ? 'bg-blue-500 text-white rounded-br-sm'
-                      : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
-                  }`}
-                >
-                  {message.content}
-                </div>
-                <div className={`text-xs text-gray-500 mt-1 ${message.senderId === user.id ? 'text-right' : 'text-left'}`}>
-                  {formatTime(message.timestamp)}
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+            <div className="text-center">
+              <svg className="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <p>เริ่มการสนทนา</p>
+            </div>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`flex max-w-[75%] ${message.sender_id === currentUser.id ? 'flex-row-reverse' : 'flex-row'} items-end space-x-2`}>
+                {message.sender_id !== currentUser.id && (
+                  <div className="flex-shrink-0">
+                    {getProfileImage({ 
+                      name: message.name, 
+                      profile_image: message.profile_image 
+                    }, 'w-6 h-6')}
+                  </div>
+                )}
+                <div>
+                  <div
+                    className={`px-3 py-2 rounded-xl text-sm ${
+                      message.sender_id === currentUser.id
+                        ? 'bg-blue-500 text-white rounded-br-sm'
+                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm'
+                    }`}
+                  >
+                    {message.message}
+                  </div>
+                  <div className={`text-xs text-gray-500 mt-1 ${message.sender_id === currentUser.id ? 'text-right' : 'text-left'}`}>
+                    {formatTime(message.created_at)}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
 
         {/* Typing Indicator */}
         {isTyping && (
           <div className="flex justify-start">
             <div className="flex items-end space-x-2">
-              {getProfileImage(chat?.id, chat?.name, 'w-6 h-6')}
+              {getProfileImage(chatUser, 'w-6 h-6')}
               <div className="bg-white border border-gray-200 rounded-xl rounded-bl-sm px-3 py-2">
                 <div className="flex space-x-1">
                   <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
@@ -248,29 +279,23 @@ export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
       {/* Message Input */}
       <div className="p-3 border-t border-gray-200 flex-shrink-0 bg-white rounded-b-lg">
         <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-          <div className="flex-1 flex items-center space-x-2">
-            <button
-              type="button"
-              className="text-blue-500 hover:text-blue-600 transition-colors duration-200"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-            <input
-              ref={inputRef}
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="พิมพ์ข้อความ..."
-              className="flex-1 px-3 py-2 bg-gray-100 border-0 rounded-full focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 text-sm"
-            />
-          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            value={newMessage}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping();
+            }}
+            placeholder="พิมพ์ข้อความ..."
+            disabled={!connected}
+            className="flex-1 px-3 py-2 bg-gray-100 border-0 rounded-full focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all duration-200 text-sm disabled:opacity-50"
+          />
           <button
             type="submit"
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || !connected}
             className={`p-2 rounded-full transition-all duration-200 ${
-              newMessage.trim()
+              newMessage.trim() && connected
                 ? 'text-blue-500 hover:text-blue-600 hover:bg-blue-50'
                 : 'text-gray-400 cursor-not-allowed'
             }`}
@@ -280,25 +305,6 @@ export default function ChatBox({ chat = {}, user = {}, onClose = () => {} }) {
             </svg>
           </button>
         </form>
-
-        {/* Quick Actions */}
-        <div className="flex items-center justify-center space-x-4 mt-2">
-          <button className="text-gray-400 hover:text-blue-500 transition-colors duration-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </button>
-          <button className="text-gray-400 hover:text-blue-500 transition-colors duration-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.5a2.5 2.5 0 100-5H9v5zm0 0H7.5a2.5 2.5 0 100 5H9V10z" />
-            </svg>
-          </button>
-          <button className="text-gray-400 hover:text-blue-500 transition-colors duration-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-1 0v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4h1z" />
-            </svg>
-          </button>
-        </div>
       </div>
     </div>
   );

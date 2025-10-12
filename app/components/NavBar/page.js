@@ -9,6 +9,8 @@ export default function NavBar({ onLogout, onChatOpen }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [notifications, setNotifications] = useState([
     {
       id: 1,
@@ -33,36 +35,6 @@ export default function NavBar({ onLogout, onChatOpen }) {
       time: '1 ชั่วโมงที่แล้ว',
       read: true,
       avatar: null
-    }
-  ]);
-  
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      name: 'สมชาย ใจดี',
-      lastMessage: 'สวัสดีครับ วันนี้เป็นอย่างไรบ้าง',
-      time: '2 นาทีที่แล้ว',
-      unread: 2,
-      avatar: null,
-      online: true
-    },
-    {
-      id: 2,
-      name: 'สมหญิง สุขใจ',
-      lastMessage: 'งานเสร็จแล้วนะคะ',
-      time: '1 ชั่วโมงที่แล้ว',
-      unread: 0,
-      avatar: null,
-      online: false
-    },
-    {
-      id: 3,
-      name: 'กลุ่ม: ทีมงาน',
-      lastMessage: 'ประชุมพรุ่งนี้ 9 โมง',
-      time: '3 ชั่วโมงที่แล้ว',
-      unread: 5,
-      avatar: null,
-      online: false
     }
   ]);
 
@@ -100,6 +72,66 @@ export default function NavBar({ onLogout, onChatOpen }) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Fetch chats when messages dropdown is opened
+  useEffect(() => {
+    if (showMessages && messages.length === 0) {
+      fetchChats();
+    }
+  }, [showMessages]);
+
+  const fetchChats = async () => {
+    setMessagesLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/chats', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const formattedMessages = data.chats.map((chat) => ({
+          id: chat.other_user_id,
+          name: chat.other_user_name,
+          lastMessage: chat.last_message || 'ไม่มีข้อความ',
+          time: formatTime(chat.updated_at),
+          unread: chat.unread_count || 0,
+          avatar: chat.other_user_image,
+          online: false, // You can add online status if available
+          chatId: chat.id
+        }));
+        setMessages(formattedMessages);
+      } else {
+        console.error('Failed to fetch chats');
+      }
+    } catch (err) {
+      console.error('Error fetching chats:', err);
+    } finally {
+      setMessagesLoading(false);
+    }
+  };
+
+  const formatTime = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'เมื่อสักครู่';
+    if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
+    if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
+    if (diffDays < 7) return `${diffDays} วันที่แล้ว`;
+    
+    return date.toLocaleDateString('th-TH');
+  };
 
   // Helper function to get profile image
   const getProfileImage = (user, size = 'w-8 h-8') => {
@@ -161,14 +193,34 @@ export default function NavBar({ onLogout, onChatOpen }) {
     }
   };
 
-  const handleChatItemClick = (message) => {
+  const handleChatItemClick = async (message) => {
     setShowMessages(false);
-    onChatOpen({
-      id: message.id,
-      name: message.name,
-      online: message.online,
-      avatar: message.avatar
-    });
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/chats', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ otherUserId: message.id })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onChatOpen({
+          id: message.id, // เพิ่มบรรทัดนี้
+          chatId: data.chat.id,
+          name: message.name,
+          avatar: message.avatar,
+          online: message.online
+        });
+      } else {
+        console.error('Failed to open chat');
+      }
+    } catch (err) {
+      console.error('Error opening chat:', err);
+    }
   };
 
   const unreadNotifications = notifications.filter(n => !n.read).length;
@@ -187,7 +239,7 @@ export default function NavBar({ onLogout, onChatOpen }) {
             >
               Kon Sakon.
             </h1>
-            
+
             {/* Search Bar */}
             <div className="relative hidden md:block">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -257,9 +309,8 @@ export default function NavBar({ onLogout, onChatOpen }) {
                       notifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`p-4 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
-                            !notification.read ? 'bg-blue-50' : ''
-                          }`}
+                          className={`p-4 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${!notification.read ? 'bg-blue-50' : ''
+                            }`}
                         >
                           <div className="flex items-start space-x-3">
                             {getNotificationIcon(notification.type)}
@@ -320,7 +371,12 @@ export default function NavBar({ onLogout, onChatOpen }) {
                     <h3 className="text-lg font-semibold text-gray-800">ข้อความ</h3>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    {messages.length > 0 ? (
+                    {messagesLoading ? (
+                      <div className="p-8 text-center text-gray-500">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                        <p className="mt-2">กำลังโหลด...</p>
+                      </div>
+                    ) : messages.length > 0 ? (
                       messages.map((message) => (
                         <div
                           key={message.id}
@@ -397,7 +453,7 @@ export default function NavBar({ onLogout, onChatOpen }) {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="py-2">
                     <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3">
                       <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -405,7 +461,7 @@ export default function NavBar({ onLogout, onChatOpen }) {
                       </svg>
                       <span className="text-gray-700">ดูโปรไฟล์</span>
                     </button>
-                    
+
                     <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3">
                       <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -413,7 +469,7 @@ export default function NavBar({ onLogout, onChatOpen }) {
                       </svg>
                       <span className="text-gray-700">การตั้งค่า</span>
                     </button>
-                    
+
                     <button className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors duration-200 flex items-center space-x-3">
                       <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -421,7 +477,7 @@ export default function NavBar({ onLogout, onChatOpen }) {
                       <span className="text-gray-700">ความช่วยเหลือ</span>
                     </button>
                   </div>
-                  
+
                   <div className="border-t border-gray-200 py-2">
                     <button
                       onClick={onLogout}

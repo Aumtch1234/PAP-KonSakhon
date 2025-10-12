@@ -9,6 +9,7 @@ import CommentDialog from '../components/CommentDialog/page';
 import ProfileEditDialog from '../components/ProfileEdit/page';
 import ProfileSidebar from '../components/ProfileSidebar/page';
 import ChatBox from '../components/ChatBox/page';
+import { SocketProvider } from '../components/SocketProvider';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -17,9 +18,8 @@ export default function Dashboard() {
   const [members, setMembers] = useState([]);
   const [allComments, setAllComments] = useState({});
   
-  // Chat state
-  const [chatBoxOpen, setChatBoxOpen] = useState(false);
-  const [selectedChat, setSelectedChat] = useState(null);
+  // Chat state - รองรับหลาย chat boxes
+  const [activeChats, setActiveChats] = useState([]);
   
   // Comment dialog states
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
@@ -30,7 +30,6 @@ export default function Dashboard() {
   
   const router = useRouter();
 
-  // ✅ Memoize functions to use in dependencies
   const preventBack = useCallback(() => {
     window.history.pushState(null, null, window.location.pathname);
   }, []);
@@ -55,7 +54,6 @@ export default function Dashboard() {
         const safeFeeds = Array.isArray(data) ? data : [];
         setFeeds(safeFeeds);
 
-        // Load preview comments for all posts
         for (const feed of safeFeeds) {
           if (feed?.comment_count > 0) {
             loadPreviewComments(feed.id);
@@ -110,11 +108,9 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    // Prevent back navigation after login
     window.history.pushState(null, null, window.location.pathname);
     window.addEventListener('popstate', preventBack);
 
-    // Check if user is logged in
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
@@ -140,14 +136,56 @@ export default function Dashboard() {
     };
   }, [router, preventBack, handleLogout, loadFeeds, loadMembers]);
 
-  const handleChatOpen = (chatData) => {
-    setSelectedChat(chatData || {});
-    setChatBoxOpen(true);
+  const handleChatOpen = async (chatData) => {
+    if (!chatData?.id) return;
+
+    // ตรวจสอบว่ามี chat นี้เปิดอยู่แล้วหรือไม่
+    const existingChat = activeChats.find(chat => chat.chatUser.id === chatData.id);
+    if (existingChat) {
+      // ถ้ามีอยู่แล้ว ไม่ต้องทำอะไร
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      // สร้างหรือดึง chat_id จาก API
+      const res = await fetch('/api/chats', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ otherUserId: chatData.id })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to create/get chat');
+      }
+
+      const data = await res.json();
+      
+      // เพิ่ม chat ใหม่เข้าไปใน array
+      const newChat = {
+        chatId: data.chat.id,
+        chatUser: {
+          id: chatData.id,
+          name: chatData.name,
+          online: chatData.online || false,
+          profile_image: chatData.avatar || chatData.profile_image
+        }
+      };
+
+      setActiveChats(prev => [...prev, newChat]);
+      
+    } catch (err) {
+      console.error('Error opening chat:', err);
+      alert('ไม่สามารถเปิดแชทได้ กรุณาลองใหม่อีกครั้ง');
+    }
   };
 
-  const handleChatClose = () => {
-    setChatBoxOpen(false);
-    setSelectedChat(null);
+  const handleChatClose = (chatUserId) => {
+    setActiveChats(prev => prev.filter(chat => chat.chatUser.id !== chatUserId));
   };
 
   if (loading) {
@@ -163,88 +201,99 @@ export default function Dashboard() {
   const safeMembers = Array.isArray(members) ? members : [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen} />
+    <SocketProvider>
+      <div className="min-h-screen bg-gray-50">
+        <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar - Members */}
-          <div className="lg:col-span-1">
-            <MembersSidebar members={safeMembers} />
-          </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left Sidebar - Members */}
+            <div className="lg:col-span-1">
+              <MembersSidebar members={safeMembers} onChatOpen={handleChatOpen} />
+            </div>
 
-          {/* Center - Feed */}
-          <div className="lg:col-span-2">
-            <CreatePost user={safeUser} onPostCreated={loadFeeds} />
-            
-            <div className="space-y-6">
-              {safeFeeds.map((feed) => (
-                <FeedPost
-                  key={feed?.id}
-                  feed={feed || {}}
-                  user={safeUser}
-                  allComments={allComments}
-                  onDeletePost={loadFeeds}
-                  onLikePost={setFeeds}
-                  onCommentClick={() => {
-                    setSelectedPostId(feed?.id);
-                    setCommentDialogOpen(true);
-                  }}
-                />
-              ))}
+            {/* Center - Feed */}
+            <div className="lg:col-span-2">
+              <CreatePost user={safeUser} onPostCreated={loadFeeds} />
+              
+              <div className="space-y-6">
+                {safeFeeds.map((feed) => (
+                  <FeedPost
+                    key={feed?.id}
+                    feed={feed || {}}
+                    user={safeUser}
+                    allComments={allComments}
+                    onDeletePost={loadFeeds}
+                    onLikePost={setFeeds}
+                    onCommentClick={() => {
+                      setSelectedPostId(feed?.id);
+                      setCommentDialogOpen(true);
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Right Sidebar - User Profile */}
+            <div className="lg:col-span-1">
+              <ProfileSidebar
+                user={safeUser}
+                feeds={safeFeeds}
+                members={safeMembers}
+                onEditProfile={() => setProfileDialogOpen(true)}
+              />
             </div>
           </div>
+        </div>
 
-          {/* Right Sidebar - User Profile */}
-          <div className="lg:col-span-1">
-            <ProfileSidebar
-              user={safeUser}
-              feeds={safeFeeds}
-              members={safeMembers}
-              onEditProfile={() => setProfileDialogOpen(true)}
+        {/* Comment Dialog */}
+        {commentDialogOpen && selectedPostId && (
+          <CommentDialog
+            postId={selectedPostId}
+            user={safeUser}
+            onClose={() => {
+              setCommentDialogOpen(false);
+              setSelectedPostId(null);
+            }}
+            onCommentAdded={() => {
+              loadFeeds();
+              if (selectedPostId) {
+                loadPreviewComments(selectedPostId);
+              }
+            }}
+          />
+        )}
+
+        {/* Profile Edit Dialog */}
+        {profileDialogOpen && (
+          <ProfileEditDialog
+            user={safeUser}
+            onClose={() => setProfileDialogOpen(false)}
+            onUpdate={(updatedUser) => {
+              setUser(updatedUser || {});
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+            }}
+          />
+        )}
+
+        {/* Multiple Chat Boxes */}
+        {activeChats.map((chat, index) => (
+          <div
+            key={chat.chatUser.id}
+            style={{
+              right: `${(index * 336) + 16}px` // 320px width + 16px margin
+            }}
+            className="fixed bottom-0 z-50"
+          >
+            <ChatBox
+              chatId={chat.chatId}
+              chatUser={chat.chatUser}
+              currentUser={safeUser}
+              onClose={() => handleChatClose(chat.chatUser.id)}
             />
           </div>
-        </div>
+        ))}
       </div>
-
-      {/* Comment Dialog */}
-      {commentDialogOpen && selectedPostId && (
-        <CommentDialog
-          postId={selectedPostId}
-          user={safeUser}
-          onClose={() => {
-            setCommentDialogOpen(false);
-            setSelectedPostId(null);
-          }}
-          onCommentAdded={() => {
-            loadFeeds();
-            if (selectedPostId) {
-              loadPreviewComments(selectedPostId);
-            }
-          }}
-        />
-      )}
-
-      {/* Profile Edit Dialog */}
-      {profileDialogOpen && (
-        <ProfileEditDialog
-          user={safeUser}
-          onClose={() => setProfileDialogOpen(false)}
-          onUpdate={(updatedUser) => {
-            setUser(updatedUser || {});
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-          }}
-        />
-      )}
-
-      {/* Chat Box */}
-      {chatBoxOpen && selectedChat && (
-        <ChatBox
-          chat={selectedChat}
-          user={safeUser}
-          onClose={handleChatClose}
-        />
-      )}
-    </div>
+    </SocketProvider>
   );
 }
