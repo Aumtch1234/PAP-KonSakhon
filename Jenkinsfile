@@ -85,54 +85,60 @@ pipeline {
     }
 
     stage('Initialize Database Schema') {
-      steps {
-        echo '🌱 Initializing database schema...'
-        sh '''
-          if [ -f "DB/init.sql" ]; then
-            echo "📦 Importing DB/init.sql..."
-            docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql 2>&1
-            
-            if [ $? -eq 0 ]; then
-              echo "✅ Database schema initialized successfully"
-            else
-              echo "⚠️  Database initialization completed (may have warnings)"
-            fi
-            
-            # Verify tables
-            echo "📋 Checking database tables..."
-            docker exec postgres psql -U postgres -d WEB_APP -c "\\dt" || true
-          else
-            echo "⚠️  DB/init.sql not found - creating basic schema"
-            # Create basic tables if init.sql doesn't exist
-            docker exec -i postgres psql -U postgres -d WEB_APP << EOF
-              CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255),
-                email VARCHAR(255) UNIQUE,
-                created_at TIMESTAMP DEFAULT NOW()
-              );
-              
-              CREATE TABLE IF NOT EXISTS chats (
-                id SERIAL PRIMARY KEY,
-                user1_id INT NOT NULL,
-                user2_id INT NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
-              );
-              
-              CREATE TABLE IF NOT EXISTS messages (
-                id SERIAL PRIMARY KEY,
-                chat_id INT NOT NULL,
-                sender_id INT NOT NULL,
-                message TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW()
-              );
-              
-              echo "✅ Basic schema created"
-EOF
+    steps {
+      echo '🌱 Initializing database schema...'
+      sh '''
+        # รอให้ postgres พร้อมแบบสมบูรณ์
+        echo "⏳ Waiting for PostgreSQL to be fully ready..."
+        sleep 15
+        
+        MAX_ATTEMPTS=30
+        ATTEMPT=0
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          if docker exec postgres pg_isready -U postgres > /dev/null 2>&1; then
+            echo "✅ PostgreSQL is responding"
+            break
           fi
-        '''
-      }
+          ATTEMPT=$((ATTEMPT + 1))
+          sleep 1
+        done
+        
+        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+          echo "❌ PostgreSQL failed to start!"
+          docker logs postgres
+          exit 1
+        fi
+        
+        # ตรวจสอบ database WEB_APP มีอยู่หรือไม่
+        if docker exec postgres psql -U postgres -lqt | cut -d \| -f 1 | grep -qw WEB_APP; then
+          echo "✅ Database WEB_APP exists"
+        else
+          echo "⚠️  Database WEB_APP not found, creating..."
+          docker exec postgres psql -U postgres -c "CREATE DATABASE WEB_APP;" || true
+        fi
+        
+        # Import SQL
+        if [ -f "DB/init.sql" ]; then
+          echo "📦 Importing DB/init.sql ($(wc -l < DB/init.sql) lines)..."
+          docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Database schema initialized successfully"
+          else
+            echo "❌ Database import failed"
+            exit 1
+          fi
+          
+          # Verify tables
+          echo "📋 Database tables:"
+          docker exec postgres psql -U postgres -d WEB_APP -c "\\dt"
+        else
+          echo "❌ DB/init.sql not found!"
+          exit 1
+        fi
+      '''
     }
+  }
 
     stage('Seed Initial Data (Optional)') {
       steps {
