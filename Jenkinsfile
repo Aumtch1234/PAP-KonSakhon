@@ -78,6 +78,24 @@ pipeline {
         '''
       }
     }
+    stage('Seed Database') {
+      steps {
+        echo '🌱 Seeding database with initial data...'
+        sh '''
+          # รอให้ Postgres พร้อมแน่ๆ ก่อน import
+          echo "⏳ Waiting for Postgres to be ready..."
+          sleep 5
+          # ตรวจสอบว่าไฟล์ init.sql อยู่จริง
+          if [ -f "DB/init.sql" ]; then
+            echo "📦 Importing DB/init.sql into Postgres..."
+            docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql
+            echo "✅ Database seeding completed!"
+          else
+            echo "⚠️  DB/init.sql not found! Skipping import."
+          fi
+        '''
+      }
+    }
   }
 
   post {
