@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import NavBar from '../components/NavBar/page';
 import MembersSidebar from '../components/MembersSidebar/page';
 import CreatePost from '../components/CreatePost/page';
@@ -17,7 +17,6 @@ export default function Dashboard() {
   const [feeds, setFeeds] = useState([]);
   const [members, setMembers] = useState([]);
   const [allComments, setAllComments] = useState({});
-  const [highlightedPostId, setHighlightedPostId] = useState(null);
   
   // Chat state - รองรับหลาย chat boxes
   const [activeChats, setActiveChats] = useState([]);
@@ -30,7 +29,6 @@ export default function Dashboard() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const preventBack = useCallback(() => {
     window.history.pushState(null, null, window.location.pathname);
@@ -141,17 +139,14 @@ export default function Dashboard() {
   const handleChatOpen = async (chatData) => {
     if (!chatData?.id) return;
 
-    // ตรวจสอบว่ามี chat นี้เปิดอยู่แล้วหรือไม่
     const existingChat = activeChats.find(chat => chat.chatUser.id === chatData.id);
     if (existingChat) {
-      // ถ้ามีอยู่แล้ว ไม่ต้องทำอะไร
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
       
-      // สร้างหรือดึง chat_id จาก API
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: {
@@ -167,7 +162,6 @@ export default function Dashboard() {
 
       const data = await res.json();
       
-      // เพิ่ม chat ใหม่เข้าไปใน array
       const newChat = {
         chatId: data.chat.id,
         chatUser: {
@@ -283,7 +277,7 @@ export default function Dashboard() {
           <div
             key={chat.chatUser.id}
             style={{
-              right: `${(index * 336) + 16}px` // 320px width + 16px margin
+              right: `${(index * 336) + 16}px`
             }}
             className="fixed bottom-0 z-50"
           >
