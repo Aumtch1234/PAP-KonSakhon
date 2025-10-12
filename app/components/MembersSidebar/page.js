@@ -1,10 +1,70 @@
 'use client';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function MembersSidebar({ members = [] }) {
   // ✅ Safe array check
   const safeMembers = Array.isArray(members) ? members : [];
   const activeMembersCount = safeMembers.filter(m => m?.status === 'active').length;
   const onlineCount = safeMembers.filter(m => m?.online).length;
+  const [showModal, setShowModal] = useState(false);
+
+  // Modal JSX extracted so it can be portaled
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={() => setShowModal(false)}></div>
+      <div className="relative w-full max-w-2xl max-h-[80vh] bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h3 className="text-lg font-medium">สมาชิกทั้งหมด ({safeMembers.length})</h3>
+          <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
+            ปิด
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 72px)' }}>
+          <div className="space-y-3">
+            {safeMembers.map((member) => (
+              <div key={member?.id} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-colors duration-200 cursor-pointer">
+                {member?.profile_image ? (
+                  <img src={member.profile_image} alt={member?.name || 'Member'} className="w-10 h-10 rounded-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold">{member?.name?.charAt(0)?.toUpperCase() || 'M'}</div>
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{member?.name || 'Unknown'}</div>
+                  <div className="text-xs text-gray-500">{member?.email || 'No email'}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // create portal root
+  const [portalEl, setPortalEl] = useState(null);
+  useEffect(() => {
+    const el = document.createElement('div');
+    el.setAttribute('id', 'members-modal-root');
+    document.body.appendChild(el);
+    setPortalEl(el);
+    return () => {
+      try { document.body.removeChild(el); } catch (e) {}
+    };
+  }, []);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    if (showModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = prev;
+    }
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showModal]);
 
   return (
     <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
@@ -50,7 +110,7 @@ export default function MembersSidebar({ members = [] }) {
         
         <div className="space-y-2 max-h-96 overflow-y-auto">
           {safeMembers.length > 0 ? (
-            safeMembers.map((member) => (
+            safeMembers.slice(0, 4).map((member) => (
               <div
                 key={member?.id}
                 className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg transition-colors duration-200 cursor-pointer group"
@@ -116,10 +176,20 @@ export default function MembersSidebar({ members = [] }) {
 
       {/* Footer */}
       <div className="border-t pt-4 mt-6">
-        <button className="w-full px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200">
-          ดูสมาชิกทั้งหมด →
-        </button>
+        {safeMembers.length > 4 ? (
+          <button
+            onClick={() => setShowModal(true)}
+            className="w-full px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
+          >
+            ดูสมาชิกทั้งหมด →
+          </button>
+        ) : (
+          <div className="text-center text-xs text-gray-400">สมาชิกทั้งหมด {safeMembers.length}</div>
+        )}
       </div>
+
+      {/* Modal for showing all members (render via portal so it sits above everything) */}
+      {showModal && portalEl && createPortal(modalContent, portalEl)}
     </div>
   );
 }
