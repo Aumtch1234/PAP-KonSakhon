@@ -4,8 +4,6 @@ pipeline {
   environment {
     DOCKER_COMPOSE = 'docker-compose.yml'
     PROJECT_NAME = 'nextjs-app'
-    REGISTRY = 'docker.io'
-    REGISTRY_CRED = 'docker-credentials'
   }
 
   stages {
@@ -22,7 +20,6 @@ pipeline {
       steps {
         echo '✅ Validating environment and files...'
         sh '''
-          # Check if required files exist
           if [ ! -f "$DOCKER_COMPOSE" ]; then
             echo "❌ docker-compose.yml not found!"
             exit 1
@@ -34,7 +31,7 @@ pipeline {
           fi
           
           if [ ! -f "DB/init.sql" ]; then
-            echo "⚠️  DB/init.sql not found - database may not initialize"
+            echo "⚠️  DB/init.sql not found"
           fi
           
           echo "✅ All required files present"
@@ -44,20 +41,111 @@ pipeline {
       }
     }
 
-    stage('Clean Old Containers') {
+    stage('Clean Old Resources') {
       steps {
         echo '🧹 Cleaning old containers and volumes...'
         sh '''
           set +e
-          
-          echo "Stopping containers..."
-          docker-compose -f $DOCKER_COMPOSE down
-          
-          echo "Removing dangling images and volumes..."
+          docker-compose -f $DOCKER_COMPOSE down -v
           docker image prune -f
           docker volume prune -f
-          
           set -e
+        '''
+      }
+    }
+
+    stage('Start Database Only') {
+      steps {
+        echo '🗄️ Starting PostgreSQL only...'
+        sh '''
+          docker-compose -f $DOCKER_COMPOSE up -d postgres
+          
+          echo "⏳ Waiting for PostgreSQL to be ready..."
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if docker exec postgres pg_isready -U postgres > /dev/null 2>&1; then
+              echo "✅ PostgreSQL is ready!"
+              break
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "⏳ Waiting... (Attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 2
+          done
+          
+          if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+            echo "❌ PostgreSQL failed to start!"
+            docker logs postgres
+            exit 1
+          fi
+        '''
+      }
+    }
+
+    stage('Initialize Database Schema') {
+      steps {
+        echo '🌱 Initializing database schema...'
+        sh '''
+          if [ -f "DB/init.sql" ]; then
+            echo "📦 Importing DB/init.sql..."
+            docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql 2>&1
+            
+            if [ $? -eq 0 ]; then
+              echo "✅ Database schema initialized successfully"
+            else
+              echo "⚠️  Database initialization completed (may have warnings)"
+            fi
+            
+            # Verify tables
+            echo "📋 Checking database tables..."
+            docker exec postgres psql -U postgres -d WEB_APP -c "\\dt" || true
+          else
+            echo "⚠️  DB/init.sql not found - creating basic schema"
+            # Create basic tables if init.sql doesn't exist
+            docker exec -i postgres psql -U postgres -d WEB_APP << EOF
+              CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255),
+                email VARCHAR(255) UNIQUE,
+                created_at TIMESTAMP DEFAULT NOW()
+              );
+              
+              CREATE TABLE IF NOT EXISTS chats (
+                id SERIAL PRIMARY KEY,
+                user1_id INT NOT NULL,
+                user2_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+              );
+              
+              CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                chat_id INT NOT NULL,
+                sender_id INT NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+              );
+              
+              echo "✅ Basic schema created"
+EOF
+          fi
+        '''
+      }
+    }
+
+    stage('Seed Initial Data (Optional)') {
+      steps {
+        echo '🌾 Seeding initial data...'
+        sh '''
+          # Optional: Check if seed data file exists
+          if [ -f "DB/seed.sql" ]; then
+            echo "📦 Importing seed data..."
+            docker exec -i postgres psql -U postgres -d WEB_APP < DB/seed.sql
+            echo "✅ Seed data imported"
+          else
+            echo "ℹ️  No seed.sql file found - skipping"
+          fi
         '''
       }
     }
@@ -74,12 +162,22 @@ pipeline {
           fi
           
           echo "✅ Build completed successfully"
-          docker images | grep -E "REPOSITORY|$PROJECT_NAME|postgres|pgadmin"
+          docker images | grep -E "REPOSITORY|$PROJECT_NAME|postgres|pgadmin" || true
         '''
       }
     }
 
-    stage('Start Services') {
+    stage('Stop Database Temporarily') {
+      steps {
+        echo '⏸️ Stopping database for full compose up...'
+        sh '''
+          docker-compose -f $DOCKER_COMPOSE down
+          sleep 2
+        '''
+      }
+    }
+
+    stage('Start All Services') {
       steps {
         echo '🚀 Starting all services...'
         sh '''
@@ -94,58 +192,39 @@ pipeline {
       }
     }
 
-    stage('Wait for Database') {
+    stage('Wait for Services') {
       steps {
-        echo '⏳ Waiting for PostgreSQL to be ready...'
+        echo '⏳ Waiting for all services to be healthy...'
         sh '''
           MAX_ATTEMPTS=30
           ATTEMPT=0
           
+          echo "Waiting for PostgreSQL..."
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             if docker exec postgres pg_isready -U postgres > /dev/null 2>&1; then
               echo "✅ PostgreSQL is ready!"
-              docker exec postgres psql -U postgres -d WEB_APP -c "SELECT version();" | head -1
-              exit 0
+              break
             fi
-            
             ATTEMPT=$((ATTEMPT + 1))
-            echo "⏳ Waiting for PostgreSQL... (Attempt $ATTEMPT/$MAX_ATTEMPTS)"
             sleep 2
           done
           
-          echo "❌ PostgreSQL failed to start!"
-          docker logs postgres
-          exit 1
-        '''
-      }
-    }
-
-    stage('Initialize Database') {
-      steps {
-        echo '🌱 Initializing database...'
-        sh '''
-          if [ -f "DB/init.sql" ]; then
-            echo "📦 Importing DB/init.sql..."
-            
-            # สร้างไฟล์ temp สำหรับ error handling
-            TEMP_LOG=$(mktemp)
-            
-            docker exec -i postgres psql -U postgres -d WEB_APP < DB/init.sql 2>&1 | tee $TEMP_LOG
-            
-            if grep -i "error" $TEMP_LOG; then
-              echo "⚠️  Database import completed with warnings"
-            else
-              echo "✅ Database initialized successfully"
-            fi
-            
-            rm $TEMP_LOG
-            
-            # ตรวจสอบ tables ที่สำคัญ
-            echo "📋 Checking database tables..."
-            docker exec postgres psql -U postgres -d WEB_APP -c "\\dt" || true
-          else
-            echo "⚠️  DB/init.sql not found - skipping database initialization"
+          if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+            echo "❌ PostgreSQL failed!"
+            exit 1
           fi
+          
+          echo "⏳ Waiting for Next.js to start..."
+          ATTEMPT=0
+          while [ $ATTEMPT -lt 20 ]; do
+            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+              echo "✅ Next.js is ready!"
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "⏳ Attempt $ATTEMPT/20"
+            sleep 3
+          done
         '''
       }
     }
@@ -154,48 +233,29 @@ pipeline {
       steps {
         echo '🔍 Performing health checks...'
         sh '''
-          echo "=== Checking PostgreSQL ==="
-          POSTGRES_STATUS=$(docker inspect -f '{{.State.Health.Status}}' postgres 2>/dev/null || echo "no healthcheck")
-          echo "PostgreSQL Status: $POSTGRES_STATUS"
-          
-          echo "=== Checking Next.js ==="
-          NEXTJS_STATUS=$(docker inspect -f '{{.State.Health.Status}}' nextjs 2>/dev/null || echo "no healthcheck")
-          echo "Next.js Status: $NEXTJS_STATUS"
-          
-          echo "=== Checking Next.js is responding ==="
-          for i in {1..10}; do
-            if curl -s http://localhost:3000 > /dev/null; then
-              echo "✅ Next.js is responding!"
-              break
-            fi
-            if [ $i -eq 10 ]; then
-              echo "⚠️  Next.js not responding yet, but container is running"
-            else
-              echo "⏳ Waiting for Next.js... (Attempt $i/10)"
-              sleep 2
-            fi
-          done
-          
-          echo "=== Active Containers ==="
+          echo "=== Container Status ==="
           docker ps --format "table {{.Names}}\t{{.State}}\t{{.Status}}"
+          
+          echo "=== PostgreSQL Health ==="
+          docker exec postgres psql -U postgres -d WEB_APP -c "SELECT version();" | head -1 || echo "Unable to connect"
+          
+          echo "=== Next.js API Check ==="
+          curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3000/ || echo "Not responding"
         '''
       }
     }
 
     stage('Verify Application') {
       steps {
-        echo '✅ Verifying application is running...'
+        echo '✅ Verifying application...'
         sh '''
-          echo "=== Container Logs (Last 20 lines) ==="
+          echo "=== Container Logs (Last 30 lines) ==="
           
-          echo "--- Next.js Logs ---"
-          docker logs --tail=20 nextjs || true
+          echo "--- Next.js ---"
+          docker logs --tail=30 nextjs 2>&1 | head -30 || true
           
-          echo "--- PostgreSQL Logs ---"
-          docker logs --tail=20 postgres || true
-          
-          echo "=== API Health Check ==="
-          curl -s -o /dev/null -w "Status: %{http_code}\n" http://localhost:3000/api/feeds || echo "API not responding yet"
+          echo "--- PostgreSQL ---"
+          docker logs --tail=30 postgres 2>&1 | head -30 || true
         '''
       }
     }
@@ -210,24 +270,15 @@ pipeline {
     }
     failure {
       echo '❌ Pipeline failed!'
-      echo 'Collecting debug information...'
       sh '''
-        echo "=== Docker Status ==="
+        echo "=== Debug Information ==="
         docker ps -a || true
-        
         echo "=== Docker Logs ==="
         docker-compose -f $DOCKER_COMPOSE logs --tail=50 || true
       '''
     }
-    unstable {
-      echo '⚠️  Pipeline unstable'
-    }
     always {
       echo '🧹 Pipeline finished'
-      sh '''
-        echo "=== Final Container Status ==="
-        docker ps --format "table {{.Names}}\t{{.Status}}" || true
-      '''
     }
   }
 }
