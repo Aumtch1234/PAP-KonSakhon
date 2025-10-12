@@ -11,7 +11,7 @@ pipeline {
     stage('Checkout') {
       steps {
         echo '📥 Pulling latest code...'
-        git branch: 'main', url: 'https://github.com/Aumtch1234/PAP-KonSakhon.git'
+        checkout scm
       }
     }
 
