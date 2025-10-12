@@ -40,14 +40,9 @@ services:
     container_name: nextjs
     ports:
       - "3000:3000"
-    volumes:
-      - .:/app        # ✅ mount ทั้งโปรเจกต์ root
-      - /app/node_modules  # ❗ ป้องกันไม่ให้ทับ node_modules ของ container
     command: sh -c "npm run dev"
     environment:
       NODE_ENV: development
-      CHOKIDAR_USEPOLLING: "true"
-      WATCHPACK_POLLING: "true"
       DATABASE_URL: postgresql://postgres:root@postgres:5432/WEB_APP
       JWT_SECRET: pap1585
     depends_on:
