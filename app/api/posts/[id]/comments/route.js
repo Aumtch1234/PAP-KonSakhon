@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import pool from '../../../../config/db';
+import { writeFile, mkdir } from 'fs/promises';
+import path from 'path';
 
 // ตรวจสอบ JWT
 function verifyToken(authHeader) {
@@ -21,6 +23,7 @@ export async function GET(request, { params }) {
         SELECT 
           c.id,
           c.content,
+          c.image_url,
           c.created_at,
           c.updated_at,
           u.id AS user_id,
@@ -49,9 +52,25 @@ export async function POST(request, { params }) {
     const decoded = verifyToken(request.headers.get('authorization'));
     // ✅ await params ก่อน
     const { id: postId } = await params;
-    const { content } = await request.json();
+    
+    // ตรวจสอบ Content-Type เพื่อดูว่าเป็น FormData หรือ JSON
+    const contentType = request.headers.get('content-type');
+    let content, imageFile;
+    
+    if (contentType && contentType.includes('multipart/form-data')) {
+      // รับข้อมูลจาก FormData
+      const formData = await request.formData();
+      content = formData.get('content');
+      imageFile = formData.get('image');
+    } else {
+      // รับข้อมูลจาก JSON (เก่า)
+      const body = await request.json();
+      content = body.content;
+    }
 
-    if (!content?.trim()) return Response.json({ error: 'กรุณาใส่เนื้อหาคอมเมนต์' }, { status: 400 });
+    if (!content?.trim() && !imageFile) {
+      return Response.json({ error: 'กรุณาใส่เนื้อหาคอมเมนต์หรือแนบรูปภาพ' }, { status: 400 });
+    }
 
     const client = await pool.connect();
     try {
@@ -59,16 +78,50 @@ export async function POST(request, { params }) {
       const postCheck = await client.query('SELECT id FROM posts WHERE id = $1', [postId]);
       if (postCheck.rowCount === 0) return Response.json({ error: 'ไม่พบโพสต์' }, { status: 404 });
 
+      let imageUrl = null;
+      
+      // จัดการอัปโหลดรูปภาพ
+      if (imageFile && imageFile.size > 0) {
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(imageFile.type)) {
+          return Response.json({ error: 'รองรับเฉพาะไฟล์รูปภาพ (JPEG, PNG, GIF, WebP)' }, { status: 400 });
+        }
+
+        if (imageFile.size > 5 * 1024 * 1024) { // 5MB
+          return Response.json({ error: 'ขนาดไฟล์ต้องไม่เกิน 5MB' }, { status: 400 });
+        }
+
+        const bytes = await imageFile.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+        
+        // สร้างชื่อไฟล์ใหม่
+        const timestamp = Date.now();
+        const randomString = Math.random().toString(36).substring(2, 15);
+        const extension = path.extname(imageFile.name) || '.jpg';
+        const fileName = `comment_${timestamp}_${randomString}${extension}`;
+        
+        // สร้างโฟลเดอร์ถ้ายังไม่มี
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'comments');
+        await mkdir(uploadDir, { recursive: true });
+        
+        // บันทึกไฟล์
+        const filePath = path.join(uploadDir, fileName);
+        await writeFile(filePath, buffer);
+        
+        imageUrl = `/uploads/comments/${fileName}`;
+      }
+
       // เพิ่มคอมเมนต์
       const insert = await client.query(
-        'INSERT INTO post_comments (user_id, post_id, content, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id',
-        [decoded.userId, postId, content.trim()]
+        'INSERT INTO post_comments (user_id, post_id, content, image_url, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id',
+        [decoded.userId, postId, content?.trim() || '', imageUrl]
       );
 
       const newComment = await client.query(
         `SELECT 
           c.id,
           c.content,
+          c.image_url,
           c.created_at,
           c.updated_at,
           u.id AS user_id,

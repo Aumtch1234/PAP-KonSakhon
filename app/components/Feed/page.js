@@ -13,38 +13,28 @@ export default function FeedPost({
   onCommentClick = () => {}
 }) {
   const [isLiking, setIsLiking] = useState(false);
+  const [imageErrors, setImageErrors] = useState({});
 
   // Helper function to get profile image with fallback
   const getProfileImageWithFallback = (userData, size = 'w-12 h-12') => {
+    const userKey = userData?.id || userData?.name || 'unknown';
+    const hasError = imageErrors[userKey];
+    
+    if (!userData?.profile_image || hasError) {
+      return (
+        <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm`}>
+          {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </div>
+      );
+    }
+
     return (
-      <div className="relative">
-        {userData?.profile_image ? (
-          <>
-            <img
-              src={userData.profile_image}
-              alt="Profile"
-              className={`${size} rounded-full object-cover border-2 border-white shadow-sm`}
-              onError={(e) => {
-                console.error('Image failed to load:', userData.profile_image);
-                e.target.style.display = 'none';
-                if (e.target.nextSibling) {
-                  e.target.nextSibling.style.display = 'flex';
-                }
-              }}
-            />
-            <div
-              className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full items-center justify-center text-white font-semibold text-sm hidden shadow-sm`}
-              style={{ display: 'none' }}
-            >
-              {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-          </>
-        ) : (
-          <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm`}>
-            {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
-        )}
-      </div>
+      <img
+        src={userData.profile_image}
+        alt="Profile"
+        className={`${size} rounded-full object-cover border-2 border-white shadow-sm`}
+        onError={() => setImageErrors(prev => ({ ...prev, [userKey]: true }))}
+      />
     );
   };
 

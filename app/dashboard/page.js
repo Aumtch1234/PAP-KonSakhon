@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import NavBar from '../components/NavBar/page';
 import MembersSidebar from '../components/MembersSidebar/page';
 import CreatePost from '../components/CreatePost/page';
@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [feeds, setFeeds] = useState([]);
   const [members, setMembers] = useState([]);
   const [allComments, setAllComments] = useState({});
+  const [highlightedPostId, setHighlightedPostId] = useState(null);
   
   // Chat state - รองรับหลาย chat boxes
   const [activeChats, setActiveChats] = useState([]);
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const preventBack = useCallback(() => {
     window.history.pushState(null, null, window.location.pathname);
