@@ -35,15 +35,21 @@ services:
       - appnet
 
   nextjs:
-    build: .
+    build:
+      context: .
+      target: builder        # ✅ ใช้สเตจ builder ที่มี dev deps ติดตั้งแล้ว
     container_name: nextjs
     ports:
       - "3000:3000"
     volumes:
-      - ./:/app
+      - ./:/app              # เมานท์โค้ด
+      - /app/node_modules    # ✅ กันไม่ให้ node_modules ในคอนเทนเนอร์โดนทับ
+      - /app/.next           # แคช build สำหรับ HMR
     command: "npm run dev"
     environment:
+      NODE_ENV: development
       DATABASE_URL: postgres://postgres:root@postgres:5432/WEB_APP
+      # WATCHPACK_POLLING: "true"  # ← ถ้า HMR ไม่เด้งบนบางเครื่องค่อยเปิดบรรทัดนี้
     depends_on:
       postgres:
         condition: service_healthy  # ✅ รอให้ postgres healthy
