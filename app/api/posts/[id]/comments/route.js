@@ -12,7 +12,8 @@ function verifyToken(authHeader) {
 export async function GET(request, { params }) {
   try {
     const decoded = verifyToken(request.headers.get('authorization'));
-    const postId = params.id;
+    // ✅ await params ก่อน
+    const { id: postId } = await params;
 
     const client = await pool.connect();
     try {
@@ -46,7 +47,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     const decoded = verifyToken(request.headers.get('authorization'));
-    const postId = params.id;
+    // ✅ await params ก่อน
+    const { id: postId } = await params;
     const { content } = await request.json();
 
     if (!content?.trim()) return Response.json({ error: 'กรุณาใส่เนื้อหาคอมเมนต์' }, { status: 400 });

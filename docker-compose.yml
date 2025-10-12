@@ -13,7 +13,6 @@ services:
       - ./DB/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - appnet
-    # ✅ เพิ่ม healthcheck
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -35,24 +34,28 @@ services:
       - appnet
 
   nextjs:
-    build:
+    build: 
       context: .
-      target: builder        # ✅ ใช้สเตจ builder ที่มี dev deps ติดตั้งแล้ว
+      dockerfile: Dockerfile
     container_name: nextjs
     ports:
       - "3000:3000"
     volumes:
-      - ./:/app              # เมานท์โค้ด
-      - /app/node_modules    # ✅ กันไม่ให้ node_modules ในคอนเทนเนอร์โดนทับ
-      - /app/.next           # แคช build สำหรับ HMR
-    command: "npm run dev"
+      - ./app:/app/app:delegated
+      - ./public:/app/public:delegated
+      - ./.env:/app/.env:ro
+      # ✅ Mount config files ที่จำเป็น
+      - ./next.config.mjs:/app/next.config.mjs:ro
+      - ./postcss.config.mjs:/app/postcss.config.mjs:ro
+      - ./jsconfig.json:/app/jsconfig.json:ro
+    command: sh -c "npm run dev"
     environment:
+      DATABASE_URL: postgresql://postgres:root@postgres:5432/WEB_APP
+      JWT_SECRET: pap1585
       NODE_ENV: development
-      DATABASE_URL: postgres://postgres:root@postgres:5432/WEB_APP
-      # WATCHPACK_POLLING: "true"  # ← ถ้า HMR ไม่เด้งบนบางเครื่องค่อยเปิดบรรทัดนี้
     depends_on:
       postgres:
-        condition: service_healthy  # ✅ รอให้ postgres healthy
+        condition: service_healthy
     networks:
       - appnet
 

@@ -14,7 +14,8 @@ export async function POST(request, { params }) {
   try {
     const authHeader = request.headers.get('authorization');
     const decoded = verifyToken(authHeader);
-    const postId = params.id;
+    // ✅ await params ก่อน
+    const { id: postId } = await params;
 
     const client = await pool.connect();
     try {
@@ -59,7 +60,8 @@ export async function GET(request, { params }) {
   try {
     const authHeader = request.headers.get('authorization');
     const decoded = verifyToken(authHeader);
-    const postId = params.id;
+    // ✅ await params ก่อน
+    const { id: postId } = await params;
 
     const client = await pool.connect();
     try {

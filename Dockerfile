@@ -1,28 +1,36 @@
-# 1️⃣ Build stage
+# 1️⃣ Build
 FROM node:20-bullseye AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
+# Copy ALL files (รวม config)
 COPY . .
-# Set environment variables to skip DB during build
-ENV NEXT_PUBLIC_DISABLE_DB=true
-ENV SKIP_DB_INIT=true
-ENV NODE_ENV=production
 
+# Build
 RUN npm run build
 
-# 2️⃣ Production stage
+# 2️⃣ Run
 FROM node:20-bullseye AS runner
 WORKDIR /app
 
-COPY --from=builder /app/package*.json ./
-RUN npm ci --omit=dev
+ENV NODE_ENV=development
 
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
+# ✅ Copy config files สำคัญ
+COPY --from=builder /app/postcss.config.mjs* ./
+COPY --from=builder /app/tailwind.config.* ./
+COPY --from=builder /app/jsconfig.json* ./
+
+# Copy source code
+COPY --from=builder /app/app ./app
+
 EXPOSE 3000
+
 CMD ["npm", "run", "start"]
