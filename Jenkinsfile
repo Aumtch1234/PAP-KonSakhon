@@ -90,7 +90,7 @@ pipeline {
           sleep 10
           
           # ตรวจสอบ database WEB_APP มีอยู่หรือไม่
-          if docker exec postgres psql -U postgres -lqt | cut -d \| -f 1 | grep -qw WEB_APP; then
+          if docker exec postgres psql -U postgres -lqt | cut -d '|' -f 1 | grep -qw WEB_APP; then
             echo "✅ Database WEB_APP exists"
           else
             echo "⚠️  Database WEB_APP not found, creating..."
