@@ -12,6 +12,7 @@
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.546.0",
     "mysql2": "^3.6.5",
     "next": "15.5.3",
     "pg": "^8.16.3",

@@ -3,11 +3,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import NavBar from '../components/NavBar/page';
 import MembersSidebar from '../components/MembersSidebar/page';
+import FriendsSidebar from '../components/ProfileSidebar/page';
 import CreatePost from '../components/CreatePost/page';
 import FeedPost from '../components/Feed/page';
 import CommentDialog from '../components/CommentDialog/page';
 import ProfileEditDialog from '../components/ProfileEdit/page';
-import ProfileSidebar from '../components/ProfileSidebar/page';
 import ChatBox from '../components/ChatBox';
 import { SocketProvider } from '../components/SocketProvider';
 
@@ -136,9 +136,10 @@ export default function Dashboard() {
     };
   }, [router, preventBack, handleLogout, loadFeeds, loadMembers]);
 
-  const handleChatOpen = async (chatData) => {
+  const handleChatOpen = useCallback(async (chatData) => {
     if (!chatData?.id) return;
 
+    // ตรวจสอบว่ามี chat นี้อยู่แล้วไหม
     const existingChat = activeChats.find(chat => chat.chatUser.id === chatData.id);
     if (existingChat) {
       return;
@@ -178,11 +179,11 @@ export default function Dashboard() {
       console.error('Error opening chat:', err);
       alert('ไม่สามารถเปิดแชทได้ กรุณาลองใหม่อีกครั้ง');
     }
-  };
+  }, [activeChats]);
 
-  const handleChatClose = (chatUserId) => {
+  const handleChatClose = useCallback((chatUserId) => {
     setActiveChats(prev => prev.filter(chat => chat.chatUser.id !== chatUserId));
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -199,45 +200,46 @@ export default function Dashboard() {
   return (
     <SocketProvider>
       <div className="min-h-screen bg-gray-50">
-        <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen} />
+        <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen}   onEditProfile={() => setProfileDialogOpen(true)} />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar - Members */}
-            <div className="lg:col-span-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Left Sidebar - Members (Hidden on mobile, 1 col on md, 1 col on lg) */}
+            <div className="hidden md:block md:col-span-1 lg:col-span-1">
               <MembersSidebar members={safeMembers} onChatOpen={handleChatOpen} />
             </div>
 
-            {/* Center - Feed */}
-            <div className="lg:col-span-2">
+            {/* Center - Feed (Full on mobile, 3 cols on md, 3 cols on lg) */}
+            <div className="col-span-1 md:col-span-2 lg:col-span-3">
               <CreatePost user={safeUser} onPostCreated={loadFeeds} />
               
               <div className="space-y-6">
-                {safeFeeds.map((feed) => (
-                  <FeedPost
-                    key={feed?.id}
-                    feed={feed || {}}
-                    user={safeUser}
-                    allComments={allComments}
-                    onDeletePost={loadFeeds}
-                    onLikePost={setFeeds}
-                    onCommentClick={() => {
-                      setSelectedPostId(feed?.id);
-                      setCommentDialogOpen(true);
-                    }}
-                  />
-                ))}
+                {safeFeeds.length > 0 ? (
+                  safeFeeds.map((feed) => (
+                    <FeedPost
+                      key={feed?.id}
+                      feed={feed || {}}
+                      user={safeUser}
+                      allComments={allComments}
+                      onDeletePost={loadFeeds}
+                      onLikePost={setFeeds}
+                      onCommentClick={() => {
+                        setSelectedPostId(feed?.id);
+                        setCommentDialogOpen(true);
+                      }}
+                    />
+                  ))
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                    <p className="text-gray-500">ยังไม่มีโพสต์</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Right Sidebar - User Profile */}
-            <div className="lg:col-span-1">
-              <ProfileSidebar
-                user={safeUser}
-                feeds={safeFeeds}
-                members={safeMembers}
-                onEditProfile={() => setProfileDialogOpen(true)}
-              />
+            {/* Right Sidebar - Profile + Friends (Hidden on mobile, 1 col on md, 1 col on lg) */}
+            <div className="hidden md:flex md:col-span-1 lg:col-span-1 flex-col gap-6">        
+              <FriendsSidebar onChatOpen={handleChatOpen} />
             </div>
           </div>
         </div>
@@ -272,23 +274,22 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Multiple Chat Boxes */}
-        {activeChats.map((chat, index) => (
-          <div
-            key={chat.chatUser.id}
-            style={{
-              right: `${(index * 336) + 16}px`
-            }}
-            className="fixed bottom-0 z-50"
-          >
-            <ChatBox
-              chatId={chat.chatId}
-              chatUser={chat.chatUser}
-              currentUser={safeUser}
-              onClose={() => handleChatClose(chat.chatUser.id)}
-            />
-          </div>
-        ))}
+        {/* Multiple Chat Boxes - Stack ทีละชั้นจากขวา */}
+        <div className="fixed bottom-0 right-4 flex flex-col-reverse gap-2 pointer-events-none">
+          {activeChats.map((chat) => (
+            <div
+              key={chat.chatUser.id}
+              className="pointer-events-auto"
+            >
+              <ChatBox
+                chatId={chat.chatId}
+                chatUser={chat.chatUser}
+                currentUser={safeUser}
+                onClose={() => handleChatClose(chat.chatUser.id)}
+              />
+            </div>
+          ))}
+        </div>
       </div>
     </SocketProvider>
   );

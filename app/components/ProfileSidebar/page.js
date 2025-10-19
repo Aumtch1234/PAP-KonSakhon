@@ -1,148 +1,179 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { MessageCircle, Search, Trash2 } from 'lucide-react';
 
-export default function ProfileSidebar({ 
-  user = {}, 
-  feeds = [], 
-  members = [], 
-  onEditProfile = () => {} 
-}) {
-  const [imageError, setImageError] = useState(false);
-  
-  const getProfileImageWithFallback = (user, size = 'w-20 h-20 mx-auto') => {
+export default function FriendsSidebar({ onChatOpen = () => {} }) {
+  const [friends, setFriends] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredFriends, setFilteredFriends] = useState([]);
+
+  useEffect(() => {
+    fetchFriends();
+  }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredFriends(friends);
+    } else {
+      const filtered = friends.filter(friend =>
+        friend.friend_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredFriends(filtered);
+    }
+  }, [searchQuery, friends]);
+
+  const fetchFriends = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/friends/list', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setFriends(data.friends || []);
+      }
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getProfileImage = (userData, size = 'w-10 h-10') => {
+    const defaultName = userData?.friend_name || 'F';
+    if (userData?.friend_profile_image) {
+      return (
+        <img
+          src={userData.friend_profile_image}
+          alt={userData.friend_name}
+          className={`${size} rounded-full object-cover`}
+        />
+      );
+    }
     return (
-      <div className="relative">
-        {user?.profile_image && !imageError ? (
-          <img
-            src={user.profile_image}
-            alt="Profile"
-            className={`${size} rounded-full object-cover border-4 border-white shadow-lg`}
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg`}>
-            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-          </div>
-        )}
+      <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+        {defaultName.charAt(0)?.toUpperCase()}
       </div>
     );
   };
 
-  // ✅ Add safety check for feeds array
-  const safeFeedsArray = Array.isArray(feeds) ? feeds : [];
-  const userPosts = safeFeedsArray.filter(f => f?.user_id === user?.id);
+  const handleChatClick = async (friend) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/chats', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ otherUserId: friend.friend_id })
+      });
 
-  // ✅ Add safety check for members array
-  const safeMembersArray = Array.isArray(members) ? members : [];
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Chat opened:', data);
+        onChatOpen({
+          id: friend.friend_id,
+          chatId: data.chat.id,
+          name: friend.friend_name,
+          avatar: friend.friend_profile_image,
+          email: friend.friend_email,
+          online: false
+        });
+      }
+    } catch (err) {
+      console.error('Error opening chat:', err);
+    }
+  };
 
-  // ✅ Calculate total likes safely
-  const totalLikes = userPosts.reduce((sum, post) => sum + (post?.like_count || 0), 0);
+  const handleViewProfile = (friendId) => {
+    window.location.href = `/profile/${friendId}`;
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
-      {/* Profile Header */}
-      <div className="text-center mb-6">
-        <div className="mb-4 relative">
-          {getProfileImageWithFallback(user, 'w-20 h-20 mx-auto')}
-          <div className="absolute bottom-1 right-1/2 transform translate-x-6 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
-        </div>
-        <h3 className="text-xl font-bold text-gray-800 mb-1">{user?.name || 'User'}</h3>
-        <p className="text-sm text-gray-600 mb-3">{user?.email || 'No email'}</p>
-        <div className="inline-flex px-3 py-1 bg-blue-100 text-blue-600 text-sm font-medium rounded-full">
-          ออนไลน์
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="space-y-3 mb-6">
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-100">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              <span className="text-sm font-medium text-blue-700">โพสต์ของคุณ</span>
-            </div>
-            <span className="font-bold text-blue-800 text-lg">{userPosts.length}</span>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border border-green-100">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              <span className="text-sm font-medium text-green-700">สมาชิก</span>
-            </div>
-            <span className="font-bold text-green-800 text-lg">{safeMembersArray.length}</span>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-100">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm font-medium text-purple-700">ไลก์ที่ได้รับ</span>
-            </div>
-            <span className="font-bold text-purple-800 text-lg">{totalLikes}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="space-y-3 mb-6">
-        <button
-          onClick={onEditProfile}
-          className="w-full flex items-center justify-center space-x-2 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-lg transition-all duration-200 font-medium"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          <span>แก้ไขโปรไฟล์</span>
-        </button>
+    <div className="bg-white rounded-lg shadow-sm sticky top-24 h-fit">
+      {/* Header */}
+      <div className="p-3 border-b border-gray-200">
+        <h3 className="text-base font-bold text-gray-800 mb-2">เพื่อน ({friends.length})</h3>
         
-        <button className="w-full flex items-center justify-center space-x-2 bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg transition-all duration-200 font-medium">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-          </svg>
-          <span>ดูเรื่องราวของคุณ</span>
-        </button>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="border-t pt-6">
-        <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center">
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          กิจกรรมล่าสุด
-        </h4>
-        
-        <div className="space-y-3">
-          <div className="flex items-center space-x-3 text-sm">
-            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-            <span className="text-gray-600">เข้าร่วมชุมชน</span>
-          </div>
-          <div className="flex items-center space-x-3 text-sm">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <span className="text-gray-600">โพสต์ใหม่ล่าสุด</span>
-          </div>
-          <div className="flex items-center space-x-3 text-sm">
-            <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-            <span className="text-gray-600">มีคนถูกใจโพสต์</span>
-          </div>
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-gray-400" />
+          <input
+            type="text"
+            placeholder="ค้นหา..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:outline-none text-xs"
+          />
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="border-t pt-4 mt-6">
-        <p className="text-xs text-gray-500 text-center">
-          สมาชิกตั้งแต่ {new Date().getFullYear()}
-        </p>
+      {/* Friends List */}
+      <div className="overflow-y-auto max-h-[calc(100vh-280px)]">
+        {loading ? (
+          <div className="p-4 text-center">
+            <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+          </div>
+        ) : filteredFriends.length > 0 ? (
+          <div className="divide-y divide-gray-100">
+            {filteredFriends.map((friend) => (
+              <div
+                key={friend.friend_id}
+                className="p-2 hover:bg-gray-50 transition-colors group"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div 
+                    className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => handleViewProfile(friend.friend_id)}
+                  >
+                    <div className="relative flex-shrink-0">
+                      {getProfileImage(friend, 'w-9 h-9')}
+                      <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border border-white rounded-full"></div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-800 truncate">
+                        {friend.friend_name}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleChatClick(friend)}
+                    className="p-1.5 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors flex-shrink-0"
+                    title="ส่งข้อความ"
+                  >
+                    <MessageCircle className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-gray-500 text-xs">
+            <p>{searchQuery ? 'ไม่พบเพื่อน' : 'ไม่มีเพื่อน'}</p>
+          </div>
+        )}
       </div>
+
+      <style jsx>{`
+        div::-webkit-scrollbar {
+          width: 5px;
+        }
+        div::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 3px;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background: #9ca3af;
+        }
+      `}</style>
     </div>
   );
 }

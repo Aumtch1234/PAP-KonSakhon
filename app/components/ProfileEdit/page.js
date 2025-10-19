@@ -5,6 +5,7 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
+    bio: user?.bio || '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -46,7 +47,7 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
   const handleProfileImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         setProfileMessage('รูปภาพต้องมีขนาดไม่เกิน 5MB');
         return;
       }
@@ -58,7 +59,6 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
 
       setNewProfileImage(file);
 
-      // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
         setProfileImagePreview(e.target.result);
@@ -79,7 +79,6 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
     setProfileLoading(true);
     setProfileMessage('');
 
-    // Password validation
     if (profileData.newPassword && profileData.newPassword !== profileData.confirmPassword) {
       setProfileMessage('รหัสผ่านใหม่ไม่ตรงกัน');
       setProfileLoading(false);
@@ -96,6 +95,7 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
       const formData = new FormData();
       formData.append('name', profileData.name);
       formData.append('email', profileData.email);
+      formData.append('bio', profileData.bio);
       if (profileData.currentPassword) {
         formData.append('currentPassword', profileData.currentPassword);
       }
@@ -144,7 +144,7 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
-            <h3 className="text-lg font-semibold">แก้ไขโปรไฟล์</h3>
+            <h3 className="text-lg font-semibold">แก้ไขข้อมูลส่วนตัว</h3>
           </div>
           <button
             onClick={onClose}
@@ -226,7 +226,7 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <input
@@ -238,6 +238,32 @@ export default function ProfileEditDialog({ user, onClose, onUpdate }) {
                 className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none"
                 placeholder="กรอกอีเมล"
               />
+            </div>
+          </div>
+
+          {/* Bio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              เกี่ยวกับฉัน
+            </label>
+            <div className="relative">
+              <div className="absolute top-3 left-3 pointer-events-none">
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <textarea
+                name="bio"
+                value={profileData.bio}
+                onChange={handleProfileInputChange}
+                rows="3"
+                maxLength="150"
+                className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 outline-none resize-none"
+                placeholder="บอกเล่าเกี่ยวกับตัวคุณ (สูงสุด 150 ตัวอักษร)"
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {profileData.bio.length}/150
+              </div>
             </div>
           </div>
 

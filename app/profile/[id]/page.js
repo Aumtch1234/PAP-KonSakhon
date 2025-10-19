@@ -4,18 +4,18 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import NavBar from '../../components/NavBar/page';
 import CommentDialog from '../../components/CommentDialog/page';
-// หมายเหตุ: react-medium-image-zoom เป็น library ภายนอก
-// หากคุณได้ติดตั้งไว้แล้ว สามารถ uncomment บรรทัดนี้ได้
-// import Zoom from "react-medium-image-zoom";
-// import "react-medium-image-zoom/dist/styles.css";
+import Zoom from "react-medium-image-zoom";
+import "react-medium-image-zoom/dist/styles.css";
+import { MessageCircle, UserPlus, UserCheck, UserX, X, Check, Mail, Heart, MessageSquare, Trash2, Upload, Share2 } from 'lucide-react';
 
 // ====================================================================
-//   ProfileEditDialog Component (สำหรับแก้ไขโปรไฟล์)
+//   ProfileEditDialog Component
 // ====================================================================
 function ProfileEditDialog({ user, onClose, onUpdate }) {
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
+    bio: user?.bio || '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
@@ -27,23 +27,12 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
 
   const getProfileImage = (user, size = 'w-24 h-24') => {
     if (profileImagePreview) {
-       return <img src={profileImagePreview} alt="Profile Preview" className={`${size} rounded-full object-cover border-4 border-blue-200 shadow-lg`} />;
+      return <img src={profileImagePreview} alt="Profile Preview" className={`${size} rounded-2xl object-cover border-4 border-white shadow-lg`} />;
     }
     if (user?.profile_image) {
-      return (
-        <img
-          src={user.profile_image}
-          alt="Profile"
-          className={`${size} rounded-full object-cover border-4 border-gray-200`}
-        />
-      );
-    } else {
-      return (
-        <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium text-xl`}>
-          {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-        </div>
-      );
+      return <img src={user.profile_image} alt="Profile" className={`${size} rounded-2xl object-cover border-4 border-white shadow-lg`} />;
     }
+    return <div className={`${size} bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg`}>{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>;
   };
 
   const handleProfileInputChange = (e) => {
@@ -53,7 +42,7 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
   const handleProfileImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         setProfileMessage('รูปภาพต้องมีขนาดไม่เกิน 5MB');
         return;
       }
@@ -83,6 +72,7 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
       const formData = new FormData();
       formData.append('name', profileData.name);
       formData.append('email', profileData.email);
+      formData.append('bio', profileData.bio);
       if (profileData.currentPassword) formData.append('currentPassword', profileData.currentPassword);
       if (profileData.newPassword) formData.append('newPassword', profileData.newPassword);
       if (newProfileImage) formData.append('profileImage', newProfileImage);
@@ -109,40 +99,51 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h3 className="text-lg font-semibold">แก้ไขโปรไฟล์</h3>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100">&times;</button>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-gray-100">
+        <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white rounded-t-3xl">
+          <h3 className="text-xl font-bold">แก้ไขโปรไฟล์</h3>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-all">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <form onSubmit={handleUpdateProfile} className="p-6 space-y-6">
-          <div className="text-center">
-            <div className="mx-auto w-24 h-24 mb-4">{getProfileImage(user)}</div>
-            <label className="bg-blue-500 text-white px-4 py-2 rounded-lg cursor-pointer hover:bg-blue-600 text-sm">
-              อัปโหลดรูปภาพ
+        <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
+          <div className="text-center mb-4">
+            <div className="mx-auto w-24 h-24 mb-3">{getProfileImage(user, 'w-24 h-24')}</div>
+            <label className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-2 rounded-xl cursor-pointer hover:shadow-lg transition-all">
+              <Upload className="w-4 h-4" />
+              อัปโหลดรูป
               <input type="file" accept="image/*" onChange={handleProfileImageChange} className="hidden" />
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">ชื่อ-นามสกุล</label>
-            <input type="text" name="name" value={profileData.name} onChange={handleProfileInputChange} required className="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-semibold text-gray-700 mb-1">ชื่อ-นามสกุล</label>
+            <input type="text" name="name" value={profileData.name} onChange={handleProfileInputChange} required className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">อีเมล</label>
-            <input type="email" name="email" value={profileData.email} onChange={handleProfileInputChange} required className="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-semibold text-gray-700 mb-1">อีเมล</label>
+            <input type="email" name="email" value={profileData.email} onChange={handleProfileInputChange} required className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
           </div>
-          <div className="border-t pt-6">
-            <h4 className="text-md font-medium text-gray-700 mb-4">เปลี่ยนรหัสผ่าน (ไม่จำเป็น)</h4>
-            <div className="space-y-4">
-              <input type="password" name="currentPassword" value={profileData.currentPassword} onChange={handleProfileInputChange} placeholder="รหัสผ่านปัจจุบัน" className="w-full p-3 rounded-xl border border-gray-300" />
-              <input type="password" name="newPassword" value={profileData.newPassword} onChange={handleProfileInputChange} minLength="6" placeholder="รหัสผ่านใหม่" className="w-full p-3 rounded-xl border border-gray-300" />
-              <input type="password" name="confirmPassword" value={profileData.confirmPassword} onChange={handleProfileInputChange} minLength="6" placeholder="ยืนยันรหัสผ่านใหม่" className="w-full p-3 rounded-xl border border-gray-300" />
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">เกี่ยวกับฉัน</label>
+            <textarea name="bio" value={profileData.bio} onChange={handleProfileInputChange} rows="2" placeholder="บอกเล่าเกี่ยวกับตัวคุณ..." className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none" />
+          </div>
+          <div className="pt-2 border-t">
+            <h4 className="text-sm font-semibold text-gray-700 mb-2">เปลี่ยนรหัสผ่าน</h4>
+            <div className="space-y-2">
+              <input type="password" name="currentPassword" value={profileData.currentPassword} onChange={handleProfileInputChange} placeholder="รหัสผ่านปัจจุบัน" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+              <input type="password" name="newPassword" value={profileData.newPassword} onChange={handleProfileInputChange} minLength="6" placeholder="รหัสผ่านใหม่" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
+              <input type="password" name="confirmPassword" value={profileData.confirmPassword} onChange={handleProfileInputChange} minLength="6" placeholder="ยืนยันรหัสผ่านใหม่" className="w-full px-3 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent" />
             </div>
           </div>
-          {profileMessage && <div className={`p-4 rounded-xl text-center text-sm ${profileMessage.includes('สำเร็จ') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{profileMessage}</div>}
-          <div className="flex space-x-3 pt-4">
-            <button type="button" onClick={onClose} className="flex-1 py-3 px-4 rounded-xl border-2 border-gray-300 hover:bg-gray-50">ยกเลิก</button>
-            <button type="submit" disabled={profileLoading} className="flex-1 py-3 px-4 rounded-xl text-white bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400">{profileLoading ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+          {profileMessage && (
+            <div className={`p-3 rounded-xl text-sm text-center font-medium ${profileMessage.includes('สำเร็จ') ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+              {profileMessage}
+            </div>
+          )}
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2 px-3 border border-gray-300 rounded-xl hover:bg-gray-50 font-medium text-sm transition-colors">ยกเลิก</button>
+            <button type="submit" disabled={profileLoading} className="flex-1 py-2 px-3 rounded-xl text-white bg-gradient-to-r from-blue-500 to-purple-600 hover:shadow-lg disabled:opacity-50 font-medium text-sm transition-all">{profileLoading ? 'กำลังบันทึก...' : 'บันทึก'}</button>
           </div>
         </form>
       </div>
@@ -150,37 +151,32 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
   );
 }
 
-
 // ====================================================================
-//   FeedPost Component (ตามตัวอย่างที่คุณต้องการ)
+//   FeedPost Component
 // ====================================================================
-function FeedPost({ 
-  feed = {}, 
-  currentUser = {},
-  onDeletePost = () => {}, 
-  onUpdateLike = () => {},
-  onCommentClick = () => {}
-}) {
+function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => {}, onUpdateLike = () => {}, onCommentClick = () => {}, allComments = {} }) {
   const [isLiking, setIsLiking] = useState(false);
+  const [imageErrors, setImageErrors] = useState({});
 
-  // Helper function to get profile image with fallback
-  const getProfileImageWithFallback = (userData, size = 'w-12 h-12') => {
-    const initial = userData?.name?.charAt(0)?.toUpperCase() || 'U';
+  const getProfileImageWithFallback = (userData, size = 'w-11 h-11') => {
+    const userKey = userData?.id || userData?.name || 'unknown';
+    const hasError = imageErrors[userKey];
     
+    if (!userData?.profile_image || hasError) {
+      return (
+        <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
+          {userData?.name?.charAt(0)?.toUpperCase() || 'U'}
+        </div>
+      );
+    }
+
     return (
-      <div className="relative flex-shrink-0">
-        {userData?.profile_image ? (
-          <img
-            src={userData.profile_image}
-            alt="Profile"
-            className={`${size} rounded-full object-cover border-2 border-white shadow-sm`}
-          />
-        ) : (
-          <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm`}>
-            {initial}
-          </div>
-        )}
-      </div>
+      <img
+        src={userData.profile_image}
+        alt="Profile"
+        className={`${size} rounded-full object-cover border-2 border-white shadow-md`}
+        onError={() => setImageErrors(prev => ({ ...prev, [userKey]: true }))}
+      />
     );
   };
 
@@ -195,7 +191,7 @@ function FeedPost({
     if (diffInHours < 24) return `${diffInHours} ชั่วโมงที่แล้ว`;
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return `${diffInDays} วันที่แล้ว`;
-    return postDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+    return postDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
   
   const handleLikePost = async () => {
@@ -209,7 +205,6 @@ function FeedPost({
       });
       if (response.ok) {
         const result = await response.json();
-        // เรียกฟังก์ชันที่ส่งมาจาก Parent เพื่ออัปเดต State
         onUpdateLike(feed.id, result.isLiked, result.likeCount);
       }
     } catch (error) {
@@ -235,85 +230,139 @@ function FeedPost({
   };
 
   const isOwner = feed?.user_id === currentUser?.id;
-  const { likes_count = 0, comments_count = 0, is_liked = false } = feed;
+  const likeCount = feed?.like_count || 0;
+  const commentCount = feed?.comment_count || 0;
+  const isLiked = feed?.is_liked || false;
+  const feedId = feed?.id;
 
   return (
-    <article className="bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden border border-gray-100 group">
-      <div className="p-6 pb-4">
+    <article className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 group">
+      {/* Header */}
+      <div className="p-5 pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3">
-            {getProfileImageWithFallback({ name: feed.user_name, profile_image: feed.user_profile_image }, 'w-11 h-11')}
+          <div className="flex items-center gap-3">
+            {getProfileImageWithFallback({ name: feed.user_name, profile_image: feed.profile_image }, 'w-11 h-11')}
             <div>
-              <h4 className="font-semibold text-gray-900 text-sm">{feed.user_name}</h4>
-              <time className="text-sm text-gray-500">{formatTime(feed.created_at)}</time>
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900 text-sm hover:text-blue-600 transition-colors">{feed.user_name}</h4>
+                {isOwner && (
+                  <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">คุณ</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                <time>{formatTime(feed.created_at)}</time>
+                <span>•</span>
+                <span>สาธารณะ</span>
+              </div>
             </div>
           </div>
           {isOwner && (
-            <button onClick={handleDeletePost} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all duration-200 opacity-0 group-hover:opacity-100" title="ลบโพสต์">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            <button onClick={handleDeletePost} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
       </div>
-      {feed.content && <p className="px-6 pb-4 text-gray-800 leading-relaxed whitespace-pre-wrap">{feed.content}</p>}
+
+      {/* Content */}
+      {feed.content && (
+        <div className="px-5 pb-3">
+          <p className="text-gray-900 text-base leading-relaxed whitespace-pre-wrap">{feed.content}</p>
+        </div>
+      )}
+
+      {/* Image */}
       {feed.image_url && (
-        <div className="px-6 pb-4">
+        <div className="px-5 pb-3">
           <div className="rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
-            {/* หากคุณมี react-medium-image-zoom ให้ใช้ <Zoom>ครอบ <img> */}
-            <img src={feed.image_url} alt="Post image" className="w-full h-auto max-h-[500px] object-cover" />
+            <Zoom>
+              <img src={feed.image_url} alt="Post image" className="w-full h-auto max-h-96 object-cover cursor-pointer hover:scale-105 transition-transform duration-300" loading="lazy" />
+            </Zoom>
           </div>
         </div>
       )}
-      
-      {/* Stats Bar - แสดงจำนวนไลค์และคอมเมนต์ */}
-      {(likes_count > 0 || comments_count > 0) && (
-        <div className="px-6 py-2 flex items-center justify-between text-sm text-gray-500 border-t border-gray-50">
-          <div className="flex items-center space-x-4">
-            {likes_count > 0 && (
-              <div className="flex items-center space-x-1">
-                <div className="flex -space-x-1">
-                  <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center border border-white">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-                <span className="ml-2">{likes_count} คนถูกใจ</span>
+
+      {/* Stats */}
+      {(likeCount > 0 || commentCount > 0) && (
+        <div className="px-5 py-2 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100">
+          {likeCount > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+                <Heart className="w-3 h-3 text-white fill-current" />
               </div>
-            )}
-          </div>
-          {comments_count > 0 && (
+              <span>{likeCount} คนถูกใจ</span>
+            </div>
+          )}
+          {commentCount > 0 && (
+            <button onClick={onCommentClick} className="hover:text-blue-600 transition-colors">
+              {commentCount} ความคิดเห็น
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center gap-1">
+        <button
+          onClick={handleLikePost}
+          disabled={isLiking}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg transition-all font-medium ${
+            isLiked
+              ? 'text-red-500 bg-red-50 hover:bg-red-100'
+              : 'text-gray-600 hover:text-red-500 hover:bg-red-50'
+          }`}
+        >
+          <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
+          <span className="hidden sm:inline">{isLiked ? 'ถูกใจแล้ว' : 'ถูกใจ'}</span>
+        </button>
+        <button
+          onClick={onCommentClick}
+          className="flex-1 flex items-center justify-center gap-2 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all font-medium"
+        >
+          <MessageSquare className="w-4 h-4" />
+          <span className="hidden sm:inline">ความคิดเห็น</span>
+        </button>
+        <button className="flex-1 flex items-center justify-center gap-2 py-2 text-sm text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all font-medium">
+          <Share2 className="w-4 h-4" />
+          <span className="hidden sm:inline">แชร์</span>
+        </button>
+      </div>
+
+      {/* Comments Preview */}
+      {commentCount > 0 && allComments?.[feedId]?.length > 0 && (
+        <div className="px-5 pb-4 bg-gray-50/30 space-y-3">
+          {allComments[feedId].slice(0, 2).map((comment) => (
+            <div key={comment?.id} className="flex items-start gap-3">
+              {getProfileImageWithFallback({ name: comment?.user_name, profile_image: comment?.profile_image }, 'w-8 h-8')}
+              <div className="flex-1">
+                <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
+                  <p className="text-xs font-medium text-gray-700 mb-1">{comment?.user_name}</p>
+                  <p className="text-sm text-gray-900 break-words">{comment?.content}</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-gray-500 mt-2 px-1">
+                  <span>{formatTime(comment?.created_at)}</span>
+                  <button className="text-gray-500 hover:text-blue-600 font-medium">ตอบกลับ</button>
+                  <button className="text-gray-500 hover:text-red-600 font-medium">ถูกใจ</button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {commentCount > 2 && (
             <button
               onClick={onCommentClick}
-              className="hover:text-blue-600 transition-colors duration-200"
+              className="w-full py-2 text-blue-600 hover:text-blue-800 text-sm font-medium hover:bg-blue-50 rounded-lg transition-all"
             >
-              {comments_count} ความคิดเห็น
+              ดูความคิดเห็นทั้งหมด ({commentCount})
             </button>
           )}
         </div>
       )}
-      
-      <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50">
-        <div className="flex items-center justify-around">
-          <button onClick={handleLikePost} disabled={isLiking} className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg transition-all ${is_liked ? 'text-red-500' : 'text-gray-600 hover:text-red-500 hover:bg-red-50'}`}>
-            <svg className={`w-5 h-5 ${is_liked ? 'fill-current' : ''}`} stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-            <span className="text-sm font-medium">{is_liked ? 'ถูกใจแล้ว' : 'ถูกใจ'}</span>
-          </button>
-          <button
-            onClick={onCommentClick}
-            className="flex-1 flex items-center justify-center space-x-2 py-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-            <span className="text-sm font-medium">ความคิดเห็น</span>
-          </button>
-        </div>
-      </div>
     </article>
   );
 }
 
 // ====================================================================
-//   ProfilePage Component (ส่วนหลักของหน้า)
+//   ProfilePage Component
 // ====================================================================
 export default function ProfilePage() {
   const params = useParams();
@@ -321,12 +370,13 @@ export default function ProfilePage() {
 
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [allComments, setAllComments] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State สำหรับเปิด/ปิด Dialog
-  
-  // Comment dialog states
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
 
@@ -336,7 +386,9 @@ export default function ProfilePage() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUser({ id: payload.userId });
-      } catch (e) { console.error('Error parsing token:', e); }
+      } catch (e) { 
+        console.error('Error parsing token:', e); 
+      }
     }
   }, []);
 
@@ -350,9 +402,10 @@ export default function ProfilePage() {
         const token = localStorage.getItem('token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
-        const [profileRes, postsRes] = await Promise.all([
+        const [profileRes, postsRes, friendshipRes] = await Promise.all([
           fetch(`/api/profile/publicProfile?userId=${userId}`, { headers }),
-          fetch(`/api/users/${userId}/posts`, { headers })
+          fetch(`/api/users/${userId}/posts`, { headers }),
+          token ? fetch(`/api/friends/status/${userId}`, { headers }) : Promise.resolve(null)
         ]);
 
         const profileData = await profileRes.json();
@@ -364,8 +417,21 @@ export default function ProfilePage() {
         const postsData = await postsRes.json();
         if (postsRes.ok && postsData.success) {
           setPosts(postsData.posts);
-        } else {
-          console.error('Could not fetch posts:', postsData.error);
+          
+          const commentsByPost = {};
+          postsData.posts.forEach(post => {
+            if (post.comments && Array.isArray(post.comments)) {
+              commentsByPost[post.id] = post.comments;
+            }
+          });
+          setAllComments(commentsByPost);
+        }
+
+        if (friendshipRes) {
+          const friendshipData = await friendshipRes.json();
+          if (friendshipRes.ok) {
+            setFriendshipStatus(friendshipData.status);
+          }
         }
       } catch (err) {
         setError(err.message);
@@ -377,10 +443,39 @@ export default function ProfilePage() {
     fetchProfileData();
   }, [userId]);
 
+  const isOwnProfile = currentUser?.id === parseInt(userId);
+
+  const handleFriendAction = async (action) => {
+    setActionLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/friends/${action}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ friendId: parseInt(userId) })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setFriendshipStatus(result.status);
+      }
+    } catch (error) {
+      console.error('Friend action error:', error);
+    }
+    setActionLoading(false);
+  };
+
+  const handleStartChat = () => {
+    window.location.href = `/chat/${userId}`;
+  };
+
   const handleUpdateLike = (postId, isLiked, likeCount) => {
     setPosts(prevPosts =>
       prevPosts.map(p =>
-        p.id === postId ? { ...p, is_liked: isLiked, likes_count: likeCount } : p
+        p.id === postId ? { ...p, is_liked: isLiked, like_count: likeCount } : p
       )
     );
   };
@@ -389,102 +484,228 @@ export default function ProfilePage() {
     setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
   };
 
-  // Function to refresh post data after comment is added
   const handleCommentAdded = async () => {
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      
       const postsRes = await fetch(`/api/users/${userId}/posts`, { headers });
       const postsData = await postsRes.json();
-      
       if (postsRes.ok && postsData.success) {
         setPosts(postsData.posts);
+        const commentsByPost = {};
+        postsData.posts.forEach(post => {
+          if (post.comments && Array.isArray(post.comments)) {
+            commentsByPost[post.id] = post.comments;
+          }
+        });
+        setAllComments(commentsByPost);
       }
     } catch (err) {
       console.error('Error refreshing posts:', err);
     }
   };
 
-  // ฟังก์ชันสำหรับรับข้อมูลที่อัปเดตจาก Dialog
   const handleProfileUpdate = (updatedUser) => {
     setUser(prevUser => ({...prevUser, ...updatedUser}));
   };
+
+  const renderFriendButton = () => {
+    if (isOwnProfile) {
+      return (
+        <button 
+          onClick={() => setIsEditDialogOpen(true)} 
+          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all flex items-center gap-2"
+        >
+          <Mail className="w-4 h-4" />
+          แก้ไขโปรไฟล์
+        </button>
+      );
+    }
+
+    if (actionLoading) {
+      return (
+        <button disabled className="px-4 py-2 bg-gray-200 text-gray-600 rounded-xl font-medium text-sm flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+        </button>
+      );
+    }
+
+    switch (friendshipStatus) {
+      case 'friends':
+        return (
+          <div className="flex gap-2">
+            <button onClick={handleStartChat} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all flex items-center gap-2">
+              <MessageCircle className="w-4 h-4" />
+              ข้อความ
+            </button>
+            <button onClick={() => handleFriendAction('remove')} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm hover:bg-red-50 hover:text-red-600 transition-all">
+              ยกเลิก
+            </button>
+          </div>
+        );
+      case 'pending':
+        return (
+          <button onClick={() => handleFriendAction('cancel')} className="px-4 py-2 bg-yellow-100 text-yellow-700 rounded-xl font-medium text-sm hover:shadow-md transition-all">
+            รอการตอบรับ
+          </button>
+        );
+      case 'waiting':
+        return (
+          <div className="flex gap-2">
+            <button onClick={() => handleFriendAction('accept')} className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all flex items-center gap-1">
+              <Check className="w-4 h-4" />
+              ยอมรับ
+            </button>
+            <button onClick={() => handleFriendAction('reject')} className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all">
+              ปฏิเสธ
+            </button>
+          </div>
+        );
+      default:
+        return (
+          <button onClick={() => handleFriendAction('send')} className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all flex items-center gap-2">
+            <UserPlus className="w-4 h-4" />
+            เพิ่มเป็นเพื่อน
+          </button>
+        );
+    }
+  };
   
   if (loading) {
-    return <div className="text-center py-20">กำลังโหลด...</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-purple-300 border-t-purple-600 rounded-full animate-spin mx-auto mb-3"></div>
+          <p className="text-gray-600 text-sm font-medium">กำลังโหลด...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="text-center py-20 text-red-500">เกิดข้อผิดพลาด: {error}</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm text-center border border-gray-100">
+          <div className="text-red-500 mb-2">
+            <X className="w-12 h-12 mx-auto" />
+          </div>
+          <p className="font-semibold text-red-700 mb-1">เกิดข้อผิดพลาด</p>
+          <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) return null;
 
-  const isOwnProfile = currentUser?.id == userId;
-
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
       <NavBar />
-      <div className="max-w-4xl mx-auto p-4 md:p-8 pt-24">
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row items-center">
-            <div className="relative">
-              {user.profile_image ? (
-                <img 
-                  src={user.profile_image} 
-                  alt={user.name} 
-                  className="w-32 h-32 md:w-40 md:h-40 rounded-full object-cover border-4 border-white shadow-lg"
-                />
-              ) : (
-                <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-4xl md:text-5xl border-4 border-white shadow-lg">
-                  {user.name?.charAt(0)?.toUpperCase() || 'U'}
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="bg-white rounded-3xl shadow-lg p-6 border border-gray-100 mb-6">
+            {/* Cover */}
+            <div className="h-32 bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 rounded-2xl mb-4 relative -m-6 mb-4 rounded-t-3xl"></div>
+
+            <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 mb-6">
+              {/* Avatar */}
+              <div className="relative z-10">
+                {user.profile_image ? (
+                  <img src={user.profile_image} alt={user.name} className="w-32 h-32 rounded-2xl object-cover border-4 border-white shadow-lg" />
+                ) : (
+                  <div className="w-32 h-32 bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 rounded-2xl flex items-center justify-center text-white font-bold text-4xl border-4 border-white shadow-lg">
+                    {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Info */}
+              <div className="flex-1 text-center md:text-left">
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">{user.name}</h1>
+                <p className="text-gray-600 flex items-center justify-center md:justify-start gap-2 mb-4">
+                  <Mail className="w-4 h-4" />
+                  {user.email}
+                </p>
+                <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                  {renderFriendButton()}
                 </div>
-              )}
+              </div>
             </div>
-            <div className="md:ml-8 mt-4 md:mt-0 text-center md:text-left">
-              <h1 className="text-3xl font-bold text-gray-800">{user.name}</h1>
-              <p className="text-gray-500 mt-1">{user.email}</p>
-              {isOwnProfile && (
-                <button onClick={() => setIsEditDialogOpen(true)} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-                  แก้ไขโปรไฟล์
-                </button>
-              )}
+
+            {/* Bio */}
+            {user.bio && (
+              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-4 mb-6 border border-purple-100">
+                <p className="text-gray-700 text-sm leading-relaxed">{user.bio}</p>
+              </div>
+            )}
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="text-center p-4 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer group">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-md group-hover:shadow-lg transition-shadow">
+                  <MessageSquare className="w-5 h-5 text-white" />
+                </div>
+                <p className="font-bold text-2xl text-gray-900">{user.total_posts || 0}</p>
+                <p className="text-xs text-gray-600 font-medium">โพสต์</p>
+              </div>
+              <div className="text-center p-4 hover:bg-red-50 rounded-xl transition-colors cursor-pointer group">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-400 to-pink-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-md group-hover:shadow-lg transition-shadow">
+                  <Heart className="w-5 h-5 text-white" />
+                </div>
+                <p className="font-bold text-2xl text-gray-900">{user.total_likes_received || 0}</p>
+                <p className="text-xs text-gray-600 font-medium">ไลค์ที่ได้รับ</p>
+              </div>
+              <div className="text-center p-4 hover:bg-purple-50 rounded-xl transition-colors cursor-pointer group">
+                <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-2 shadow-md group-hover:shadow-lg transition-shadow">
+                  <MessageCircle className="w-5 h-5 text-white" />
+                </div>
+                <p className="font-bold text-2xl text-gray-900">{user.total_comments_received || 0}</p>
+                <p className="text-xs text-gray-600 font-medium">ความเห็น</p>
+              </div>
             </div>
           </div>
-          <div className="border-t mt-6 pt-4 flex justify-around">
-            <div className="text-center"><p className="font-bold text-xl">{user.total_posts}</p><p className="text-sm text-gray-500">โพสต์</p></div>
-            <div className="text-center"><p className="font-bold text-xl">{user.total_likes_received}</p><p className="text-sm text-gray-500">ไลค์ที่ได้รับ</p></div>
-            <div className="text-center"><p className="font-bold text-xl">{user.total_comments_received}</p><p className="text-sm text-gray-500">คอมเมนต์</p></div>
+
+          {/* Posts Section */}
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-1 h-8 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></div>
+              <h2 className="text-2xl font-bold text-gray-900">โพสต์ทั้งหมด</h2>
+              <span className="ml-auto bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 px-4 py-2 rounded-full font-semibold text-sm">
+                {posts.length} โพสต์
+              </span>
+            </div>
+            
+            {posts.length > 0 ? (
+              <div className="space-y-4">
+                {posts.map(post => (
+                  <FeedPost 
+                    key={post.id} 
+                    feed={post}
+                    currentUser={currentUser}
+                    onUpdateLike={handleUpdateLike}
+                    onDeletePost={handleDeletePost}
+                    onCommentClick={() => {
+                      setSelectedPostId(post.id);
+                      setCommentDialogOpen(true);
+                    }}
+                    allComments={allComments}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-md p-12 text-center border border-gray-100">
+                <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <MessageSquare className="w-10 h-10 text-gray-400" />
+                </div>
+                <p className="text-gray-500 text-lg font-medium">ยังไม่มีโพสต์</p>
+                <p className="text-gray-400 text-sm mt-2">เริ่มแชร์ความคิดเห็นของคุณได้เลย!</p>
+              </div>
+            )}
           </div>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">โพสต์ทั้งหมด</h2>
-          {posts.length > 0 ? (
-            <div className="space-y-6">
-              {posts.map(post => (
-                <FeedPost 
-                  key={post.id} 
-                  feed={post}
-                  currentUser={currentUser}
-                  onUpdateLike={handleUpdateLike}
-                  onDeletePost={handleDeletePost}
-                  onCommentClick={() => {
-                    setSelectedPostId(post.id);
-                    setCommentDialogOpen(true);
-                  }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
-              <p>ยังไม่มีโพสต์</p>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* แสดง Dialog แก้ไขโปรไฟล์เมื่อ isEditDialogOpen เป็น true */}
       {isEditDialogOpen && (
         <ProfileEditDialog
           user={user}
@@ -493,7 +714,6 @@ export default function ProfilePage() {
         />
       )}
 
-      {/* Comment Dialog */}
       {commentDialogOpen && selectedPostId && (
         <CommentDialog
           postId={selectedPostId}
@@ -510,4 +730,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
