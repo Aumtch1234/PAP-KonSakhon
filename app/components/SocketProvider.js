@@ -1,18 +1,30 @@
 'use client';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io } from 'socket.io-client';
 
 const SocketContext = createContext();
 
 export function useSocket() {
-  return useContext(SocketContext);
+  const context = useContext(SocketContext);
+  if (!context) {
+    console.warn('⚠️ useSocket must be used within SocketProvider');
+    return { socket: null, connected: false };
+  }
+  return context;
 }
 
 export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+
     const token = localStorage.getItem('token');
     if (!token) {
       console.log('❌ No token found, skipping socket connection');
@@ -21,20 +33,16 @@ export function SocketProvider({ children }) {
 
     console.log('🔄 Initializing Socket.IO connection...');
 
-    // ดึง URL ปัจจุบันจากหน้าบราวเซอร์
-    const protocol = window.location.protocol; // 'http:' or 'https:'
-    const host = window.location.host; // รวม port ด้วย เช่น localhost:3000 หรือ example.com
-    const socketUrl = `${protocol}//${host}`; // จะกลายเป็น http://localhost:3000 หรือ https://example.com
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    const socketUrl = `${protocol}//${host}`;
 
-    console.log('🔌 Browser location:', window.location.href);
     console.log('🔌 Connecting to:', socketUrl);
-    console.log('📍 Protocol:', protocol);
-    console.log('📍 Host:', host);
 
     const socketInstance = io(socketUrl, {
       path: '/socket.io',
       auth: { token },
-      transports: ['polling', 'websocket'], // polling first as fallback
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
@@ -57,15 +65,7 @@ export function SocketProvider({ children }) {
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('🔴 Socket connection error:', {
-        message: error.message,
-        type: error.type,
-        code: error.code,
-        fullError: error
-      });
-      console.log('📡 Socket URL:', socketUrl);
-      console.log('🔌 Socket IO version:', socketInstance.version);
-      console.log('📊 Transport:', socketInstance.io?.engine?.transport?.name);
+      console.error('🔴 Socket connection error:', error.message);
       setConnected(false);
     });
 
@@ -73,14 +73,8 @@ export function SocketProvider({ children }) {
       console.error('🔴 Socket error:', error);
     });
 
-    // Custom events
-    socketInstance.on('user_online', (data) => {
-      console.log('👤 User came online:', data.userId);
-    });
-
-    socketInstance.on('user_offline', (data) => {
-      console.log('👤 User went offline:', data.userId);
-    });
+    // ✅ ไม่ต้องส่ง custom event - let components use socket directly
+    // ✅ Components จะ subscribe ผ่าน socket.on() โดยตรง
 
     setSocket(socketInstance);
 
@@ -90,7 +84,7 @@ export function SocketProvider({ children }) {
         socketInstance.disconnect();
       }
     };
-  }, []);
+  }, [isClient]);
 
   return (
     <SocketContext.Provider value={{ socket, connected }}>

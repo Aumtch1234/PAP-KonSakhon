@@ -130,7 +130,7 @@ export default function CreatePost({ user, onPostCreated }) {
                     />
                   </label>
                   
-                  <button
+                  {/* <button
                     type="button"
                     className="flex items-center space-x-2 text-gray-600 hover:text-yellow-600 cursor-pointer px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                   >
@@ -138,9 +138,9 @@ export default function CreatePost({ user, onPostCreated }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.5a2.5 2.5 0 100-5H9v5zm0 0H7.5a2.5 2.5 0 100 5H9V10z" />
                     </svg>
                     <span className="text-sm font-medium">ความรู้สึก</span>
-                  </button>
+                  </button> */}
                   
-                  <button
+                  {/* <button
                     type="button"
                     className="flex items-center space-x-2 text-gray-600 hover:text-green-600 cursor-pointer px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors duration-200"
                   >
@@ -149,7 +149,7 @@ export default function CreatePost({ user, onPostCreated }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                     <span className="text-sm font-medium">สถานที่</span>
-                  </button>
+                  </button> */}
                 </div>
                 
                 <button

@@ -17,28 +17,45 @@ export default function Dashboard() {
   const [feeds, setFeeds] = useState([]);
   const [members, setMembers] = useState([]);
   const [allComments, setAllComments] = useState({});
-  
+
   // Chat state - รองรับหลาย chat boxes
   const [activeChats, setActiveChats] = useState([]);
-  
+
   // Comment dialog states
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
-  
+
   // Profile dialog states
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-  
+
   const router = useRouter();
 
   const preventBack = useCallback(() => {
     window.history.pushState(null, null, window.location.pathname);
   }, []);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    try {
+      // ✅ อัปเดต status เป็น inactive ก่อน logout
+      const token = localStorage.getItem('token');
+      await fetch('/api/users/update-status', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'inactive' })
+      });
+    } catch (err) {
+      console.error('Error updating status:', err);
+    }
+
+    // จากนั้น logout ปกติ
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.removeEventListener('popstate', preventBack);
-    router.replace('/');
+
+    router.push('/');
   }, [router, preventBack]);
 
   const loadFeeds = useCallback(async () => {
@@ -68,7 +85,7 @@ export default function Dashboard() {
 
   const loadPreviewComments = useCallback(async (postId) => {
     if (!postId) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/posts/${postId}/comments`, {
@@ -147,7 +164,7 @@ export default function Dashboard() {
 
     try {
       const token = localStorage.getItem('token');
-      
+
       const res = await fetch('/api/chats', {
         method: 'POST',
         headers: {
@@ -156,13 +173,13 @@ export default function Dashboard() {
         },
         body: JSON.stringify({ otherUserId: chatData.id })
       });
-      
+
       if (!res.ok) {
         throw new Error('Failed to create/get chat');
       }
 
       const data = await res.json();
-      
+
       const newChat = {
         chatId: data.chat.id,
         chatUser: {
@@ -174,7 +191,7 @@ export default function Dashboard() {
       };
 
       setActiveChats(prev => [...prev, newChat]);
-      
+
     } catch (err) {
       console.error('Error opening chat:', err);
       alert('ไม่สามารถเปิดแชทได้ กรุณาลองใหม่อีกครั้ง');
@@ -200,7 +217,7 @@ export default function Dashboard() {
   return (
     <SocketProvider>
       <div className="min-h-screen bg-gray-50">
-        <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen}   onEditProfile={() => setProfileDialogOpen(true)} />
+        <NavBar onLogout={handleLogout} onChatOpen={handleChatOpen} onEditProfile={() => setProfileDialogOpen(true)} />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -212,7 +229,7 @@ export default function Dashboard() {
             {/* Center - Feed (Full on mobile, 3 cols on md, 3 cols on lg) */}
             <div className="col-span-1 md:col-span-2 lg:col-span-3">
               <CreatePost user={safeUser} onPostCreated={loadFeeds} />
-              
+
               <div className="space-y-6">
                 {safeFeeds.length > 0 ? (
                   safeFeeds.map((feed) => (
@@ -238,7 +255,7 @@ export default function Dashboard() {
             </div>
 
             {/* Right Sidebar - Profile + Friends (Hidden on mobile, 1 col on md, 1 col on lg) */}
-            <div className="hidden md:flex md:col-span-1 lg:col-span-1 flex-col gap-6">        
+            <div className="hidden md:flex md:col-span-1 lg:col-span-1 flex-col gap-6">
               <FriendsSidebar onChatOpen={handleChatOpen} />
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import NavBar from '../../components/NavBar/page';
 import CommentDialog from '../../components/CommentDialog/page';
 import Zoom from "react-medium-image-zoom";
@@ -154,14 +154,14 @@ function ProfileEditDialog({ user, onClose, onUpdate }) {
 // ====================================================================
 //   FeedPost Component
 // ====================================================================
-function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => {}, onUpdateLike = () => {}, onCommentClick = () => {}, allComments = {} }) {
+function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => { }, onUpdateLike = () => { }, onCommentClick = () => { }, allComments = {} }) {
   const [isLiking, setIsLiking] = useState(false);
   const [imageErrors, setImageErrors] = useState({});
 
   const getProfileImageWithFallback = (userData, size = 'w-11 h-11') => {
     const userKey = userData?.id || userData?.name || 'unknown';
     const hasError = imageErrors[userKey];
-    
+
     if (!userData?.profile_image || hasError) {
       return (
         <div className={`${size} bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-md`}>
@@ -193,7 +193,7 @@ function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => {}, onUpda
     if (diffInDays < 7) return `${diffInDays} วันที่แล้ว`;
     return postDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
-  
+
   const handleLikePost = async () => {
     if (isLiking || !feed?.id) return;
     setIsLiking(true);
@@ -306,11 +306,10 @@ function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => {}, onUpda
         <button
           onClick={handleLikePost}
           disabled={isLiking}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg transition-all font-medium ${
-            isLiked
-              ? 'text-red-500 bg-red-50 hover:bg-red-100'
-              : 'text-gray-600 hover:text-red-500 hover:bg-red-50'
-          }`}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg transition-all font-medium ${isLiked
+            ? 'text-red-500 bg-red-50 hover:bg-red-100'
+            : 'text-gray-600 hover:text-red-500 hover:bg-red-50'
+            }`}
         >
           <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
           <span className="hidden sm:inline">{isLiked ? 'ถูกใจแล้ว' : 'ถูกใจ'}</span>
@@ -365,9 +364,11 @@ function FeedPost({ feed = {}, currentUser = {}, onDeletePost = () => {}, onUpda
 //   ProfilePage Component
 // ====================================================================
 export default function ProfilePage() {
+  const router = useRouter();
   const params = useParams();
   const userId = params.id;
 
+  // ✅ State variables
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [allComments, setAllComments] = useState({});
@@ -380,18 +381,56 @@ export default function ProfilePage() {
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState(null);
 
+  // ✅ Prevent back function
+  const preventBack = useCallback(() => {
+    window.history.pushState(null, null, window.location.pathname);
+  }, []);
+
+  // ✅ Logout handler with back prevention
+  const handleLogout = useCallback(() => {
+    console.log('🔐 Logout initiated');
+
+    // Clear data
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // Remove event listener
+    window.removeEventListener('popstate', preventBack);
+
+    // Redirect
+    router.replace('/');
+  }, [router, preventBack]);
+
+  // ✅ Setup back prevention on mount
+  useEffect(() => {
+    window.history.pushState(null, null, window.location.pathname);
+    window.addEventListener('popstate', preventBack);
+
+    return () => {
+      window.removeEventListener('popstate', preventBack);
+    };
+  }, [preventBack]);
+
+  // ✅ Check if logged in
   useEffect(() => {
     const token = localStorage.getItem('token');
+    if (!token) {
+      router.replace('/');
+      return;
+    }
+
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUser({ id: payload.userId });
-      } catch (e) { 
-        console.error('Error parsing token:', e); 
+      } catch (e) {
+        console.error('Error parsing token:', e);
+        handleLogout();
       }
     }
-  }, []);
+  }, [router, handleLogout]);
 
+  // ✅ Rest of your existing code (useEffect for fetching profile, etc.)
   useEffect(() => {
     if (!userId) return;
 
@@ -417,7 +456,7 @@ export default function ProfilePage() {
         const postsData = await postsRes.json();
         if (postsRes.ok && postsData.success) {
           setPosts(postsData.posts);
-          
+
           const commentsByPost = {};
           postsData.posts.forEach(post => {
             if (post.comments && Array.isArray(post.comments)) {
@@ -443,6 +482,7 @@ export default function ProfilePage() {
     fetchProfileData();
   }, [userId]);
 
+  // ✅ Rest of your existing handlers and JSX
   const isOwnProfile = currentUser?.id === parseInt(userId);
 
   const handleFriendAction = async (action) => {
@@ -479,7 +519,7 @@ export default function ProfilePage() {
       )
     );
   };
-  
+
   const handleDeletePost = (postId) => {
     setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
   };
@@ -506,14 +546,14 @@ export default function ProfilePage() {
   };
 
   const handleProfileUpdate = (updatedUser) => {
-    setUser(prevUser => ({...prevUser, ...updatedUser}));
+    setUser(prevUser => ({ ...prevUser, ...updatedUser }));
   };
 
   const renderFriendButton = () => {
     if (isOwnProfile) {
       return (
-        <button 
-          onClick={() => setIsEditDialogOpen(true)} 
+        <button
+          onClick={() => setIsEditDialogOpen(true)}
           className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-medium text-sm hover:shadow-lg transition-all flex items-center gap-2"
         >
           <Mail className="w-4 h-4" />
@@ -570,7 +610,8 @@ export default function ProfilePage() {
         );
     }
   };
-  
+
+  // ✅ Return JSX
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
@@ -586,9 +627,6 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-lg p-6 max-w-sm text-center border border-gray-100">
-          <div className="text-red-500 mb-2">
-            <X className="w-12 h-12 mx-auto" />
-          </div>
           <p className="font-semibold text-red-700 mb-1">เกิดข้อผิดพลาด</p>
           <p className="text-red-600 text-sm">{error}</p>
         </div>
@@ -600,7 +638,12 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      <NavBar />
+      <NavBar
+        onLogout={handleLogout}
+        onChatOpen={() => { }}
+        onEditProfile={() => setIsEditDialogOpen(true)}
+      />
+      {/* Rest of your JSX */}
       <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header Section */}
         <div className="mb-8">
@@ -675,12 +718,12 @@ export default function ProfilePage() {
                 {posts.length} โพสต์
               </span>
             </div>
-            
+
             {posts.length > 0 ? (
               <div className="space-y-4">
                 {posts.map(post => (
-                  <FeedPost 
-                    key={post.id} 
+                  <FeedPost
+                    key={post.id}
                     feed={post}
                     currentUser={currentUser}
                     onUpdateLike={handleUpdateLike}

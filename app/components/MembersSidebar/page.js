@@ -9,6 +9,7 @@ const Avatar = ({ member, imageErrors, setImageErrors }) => {
   const memberKey = member?.id || member?.email || 'unknown';
   const hasImageError = imageErrors[memberKey];
   const hasImage = !!member?.profile_image && !hasImageError;
+  const isOnline = member?.online === true;
 
   return (
     <div className="relative flex-shrink-0">
@@ -27,7 +28,7 @@ const Avatar = ({ member, imageErrors, setImageErrors }) => {
           {initial}
         </div>
       )}
-      {member?.online && (
+      {isOnline && (
         <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse"></div>
       )}
     </div>
@@ -35,7 +36,7 @@ const Avatar = ({ member, imageErrors, setImageErrors }) => {
 };
 
 // --- Component ย่อยสำหรับแสดงรายการสมาชิกแต่ละคน ---
-const MemberItem = ({ member, showOnlineBadge = false, imageErrors, setImageErrors }) => {
+const MemberItem = ({ member, imageErrors, setImageErrors }) => {
   if (!member?.id) return null;
 
   return (
@@ -53,11 +54,6 @@ const MemberItem = ({ member, showOnlineBadge = false, imageErrors, setImageErro
           {member.email || 'No email'}
         </p>
       </div>
-      {showOnlineBadge && member?.online && (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-          ออนไลน์
-        </span>
-      )}
       <svg
         className="w-5 h-5 text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1 transition-transform duration-200"
         fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -69,7 +65,7 @@ const MemberItem = ({ member, showOnlineBadge = false, imageErrors, setImageErro
 };
 
 // --- Component หลัก: MembersSidebar ---
-export default function MembersSidebar({ members = [] }) {
+function MembersSidebarContent({ members = [] }) {
   const [showModal, setShowModal] = useState(false);
   const [portalEl, setPortalEl] = useState(null);
   const [imageErrors, setImageErrors] = useState({});
@@ -77,7 +73,7 @@ export default function MembersSidebar({ members = [] }) {
   // ใช้ useMemo เพื่อคำนวณค่าต่างๆ เพื่อประสิทธิภาพที่ดีขึ้น
   const { safeMembers, onlineCount } = useMemo(() => {
     const validMembers = Array.isArray(members) ? members.filter(Boolean) : [];
-    const online = validMembers.filter(m => m?.online).length;
+    const online = validMembers.filter(m => m?.online === true).length;
     return { safeMembers: validMembers, onlineCount: online };
   }, [members]);
 
@@ -136,8 +132,7 @@ export default function MembersSidebar({ members = [] }) {
             {safeMembers.map((member) => (
               <MemberItem 
                 key={member?.id} 
-                member={member} 
-                showOnlineBadge={true}
+                member={member}
                 imageErrors={imageErrors}
                 setImageErrors={setImageErrors}
               />
@@ -164,26 +159,6 @@ export default function MembersSidebar({ members = [] }) {
           </span>
         </div>
 
-        {/* ส่วนสถิติ */}
-        <div className="space-y-3 mb-6">
-          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-700">ออนไลน์</span>
-            </div>
-            <span className="font-semibold text-green-600">{onlineCount}</span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              <span className="text-sm text-gray-700">สมาชิกทั้งหมด</span>
-            </div>
-            <span className="font-semibold text-blue-600">{safeMembers.length}</span>
-          </div>
-        </div>
-
         {/* ส่วนรายชื่อสมาชิก */}
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide px-2 py-2">
@@ -194,8 +169,7 @@ export default function MembersSidebar({ members = [] }) {
               safeMembers.slice(0, 4).map((member) => (
                 <MemberItem 
                   key={member?.id} 
-                  member={member} 
-                  showOnlineBadge={true}
+                  member={member}
                   imageErrors={imageErrors}
                   setImageErrors={setImageErrors}
                 />
@@ -259,4 +233,61 @@ export default function MembersSidebar({ members = [] }) {
       {showModal && portalEl && createPortal(modalContent, portalEl)}
     </>
   );
+}
+
+// --- Wrapper Component ที่ดึง data จาก API ---
+export default function MembersSidebar() {
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        
+        const response = await fetch('/api/members', { headers });
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.members)) {
+          setMembers(data.members);
+        } else {
+          setError('ไม่สามารถโหลดข้อมูลสมาชิก');
+        }
+      } catch (err) {
+        console.error('Error fetching members:', err);
+        setError('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMembers();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
+        <div className="animate-pulse space-y-4">
+          <div className="h-6 bg-gray-200 rounded w-24"></div>
+          <div className="space-y-2">
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
+            <div className="h-10 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
+        <p className="text-sm text-red-600">{error}</p>
+      </div>
+    );
+  }
+
+  return <MembersSidebarContent members={members} />;
 }

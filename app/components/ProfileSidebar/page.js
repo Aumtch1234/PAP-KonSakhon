@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { MessageCircle, Search, Trash2 } from 'lucide-react';
+import { MessageCircle, Search } from 'lucide-react';
 
 export default function FriendsSidebar({ onChatOpen = () => {} }) {
   const [friends, setFriends] = useState([]);
@@ -45,6 +45,11 @@ export default function FriendsSidebar({ onChatOpen = () => {} }) {
     }
   };
 
+  // ✅ ตรวจสอบสถานะออนไลน์ (เช็ค status แทน last_login)
+  const isUserOnline = (status) => {
+    return status === 'active';
+  };
+
   const getProfileImage = (userData, size = 'w-10 h-10') => {
     const defaultName = userData?.friend_name || 'F';
     if (userData?.friend_profile_image) {
@@ -84,7 +89,7 @@ export default function FriendsSidebar({ onChatOpen = () => {} }) {
           name: friend.friend_name,
           avatar: friend.friend_profile_image,
           email: friend.friend_email,
-          online: false
+          online: isUserOnline(friend.status)
         });
       }
     } catch (err) {
@@ -95,6 +100,13 @@ export default function FriendsSidebar({ onChatOpen = () => {} }) {
   const handleViewProfile = (friendId) => {
     window.location.href = `/profile/${friendId}`;
   };
+
+  // ✅ เรียงลำดับ: active ก่อน
+  const sortedFriends = [...filteredFriends].sort((a, b) => {
+    const aOnline = isUserOnline(a.status) ? 1 : 0;
+    const bOnline = isUserOnline(b.status) ? 1 : 0;
+    return bOnline - aOnline;
+  });
 
   return (
     <div className="bg-white rounded-lg shadow-sm sticky top-24 h-fit">
@@ -121,39 +133,55 @@ export default function FriendsSidebar({ onChatOpen = () => {} }) {
           <div className="p-4 text-center">
             <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
           </div>
-        ) : filteredFriends.length > 0 ? (
+        ) : sortedFriends.length > 0 ? (
           <div className="divide-y divide-gray-100">
-            {filteredFriends.map((friend) => (
-              <div
-                key={friend.friend_id}
-                className="p-2 hover:bg-gray-50 transition-colors group"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div 
-                    className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
-                    onClick={() => handleViewProfile(friend.friend_id)}
-                  >
-                    <div className="relative flex-shrink-0">
-                      {getProfileImage(friend, 'w-9 h-9')}
-                      <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border border-white rounded-full"></div>
+            {sortedFriends.map((friend) => {
+              const online = isUserOnline(friend.status);
+              return (
+                <div
+                  key={friend.friend_id}
+                  className="p-2 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div 
+                      className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
+                      onClick={() => handleViewProfile(friend.friend_id)}
+                    >
+                      <div className="relative flex-shrink-0">
+                        {getProfileImage(friend, 'w-9 h-9')}
+                        {/* ✅ จุดสถานะ */}
+                        <div className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white rounded-full ${
+                          online 
+                            ? 'bg-green-500 animate-pulse' 
+                            : 'bg-gray-400'
+                        }`}></div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">
+                          {friend.friend_name}
+                        </p>
+                        {/* ✅ แสดงสถานะ */}
+                        <p className={`text-xs ${
+                          online 
+                            ? 'text-green-600' 
+                            : 'text-gray-400'
+                        }`}>
+                          {online ? 'ออนไลน์' : 'ออฟไลน์'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-800 truncate">
-                        {friend.friend_name}
-                      </p>
-                    </div>
+                    
+                    <button
+                      onClick={() => handleChatClick(friend)}
+                      className="p-1.5 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors flex-shrink-0"
+                      title="ส่งข้อความ"
+                    >
+                      <MessageCircle className="w-3 h-3" />
+                    </button>
                   </div>
-                  
-                  <button
-                    onClick={() => handleChatClick(friend)}
-                    className="p-1.5 rounded-full bg-blue-500 hover:bg-blue-600 text-white transition-colors flex-shrink-0"
-                    title="ส่งข้อความ"
-                  >
-                    <MessageCircle className="w-3 h-3" />
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="p-6 text-center text-gray-500 text-xs">

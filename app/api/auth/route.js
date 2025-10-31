@@ -33,7 +33,11 @@ export async function POST(request) {
         { expiresIn: '24h' }
       );
 
-      await client.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+      // ✅ อัปเดต status = 'active' และ last_login เมื่อ login สำเร็จ
+      await client.query(
+        'UPDATE users SET last_login = NOW(), status = $1 WHERE id = $2',
+        ['active', user.id]
+      );
 
       return Response.json({
         message: 'เข้าสู่ระบบสำเร็จ',

@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME || '0.0.0.0'; // ฟังจากทุก interface
+const hostname = process.env.HOSTNAME || '0.0.0.0';
 const port = process.env.PORT || 3000;
 
 const app = next({ dev, hostname, port });
@@ -25,6 +25,9 @@ const pool = process.env.DATABASE_URL
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME || 'WEB_APP'
     });
+
+// Map to store user socket connections
+const userSocketMap = new Map(); // userId -> socketId
 
 // Test database connection
 pool.connect((err, client, release) => {
@@ -53,7 +56,6 @@ app.prepare().then(() => {
     path: '/socket.io',
     cors: {
       origin: (origin, callback) => {
-        // ถ้า env ตั้งค่ากำหนด origins
         if (process.env.SOCKET_ORIGINS) {
           const allowedOrigins = process.env.SOCKET_ORIGINS.split(',');
           if (allowedOrigins.includes(origin) || !origin) {
@@ -62,7 +64,6 @@ app.prepare().then(() => {
             callback(new Error('CORS policy violation'));
           }
         } else {
-          // Allow all origins ถ้าไม่ได้ตั้งค่า
           callback(null, true);
         }
       },
@@ -103,11 +104,50 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     console.log('✅ User connected:', socket.userId, '-', socket.userName);
 
+    // ✅ เก็บ mapping ของ userId กับ socketId
+    userSocketMap.set(socket.userId, socket.id);
+
     // Join personal room
     socket.join(`user:${socket.userId}`);
 
     // Broadcast online status
     socket.broadcast.emit('user_online', { userId: socket.userId });
+
+    // ✅ New Friend Request Event
+    socket.on('send_friend_request', async (data) => {
+      const { recipientId } = data;
+      console.log(`🔔 Friend request from ${socket.userId} to ${recipientId}`);
+
+      // ดึงข้อมูล sender
+      const client = await pool.connect();
+      try {
+        const userResult = await client.query(
+          'SELECT id, name, email, profile_image FROM users WHERE id = $1',
+          [socket.userId]
+        );
+
+        if (userResult.rows.length > 0) {
+          const sender = userResult.rows[0];
+          
+          // emit ไปที่ recipient โดยตรง
+          const recipientSocketId = userSocketMap.get(recipientId);
+          if (recipientSocketId) {
+            io.to(recipientSocketId).emit('new_friend_request', {
+              sender_id: sender.id,
+              name: sender.name,
+              email: sender.email,
+              profile_image: sender.profile_image,
+              created_at: new Date()
+            });
+            console.log(`✅ Friend request sent to ${recipientId}`);
+          }
+        }
+      } catch (err) {
+        console.error('❌ Error sending friend request:', err.message);
+      } finally {
+        client.release();
+      }
+    });
 
     // Join chat room and load history
     socket.on('join_chat', async (data) => {
@@ -140,7 +180,7 @@ app.prepare().then(() => {
 
     // Send message
     socket.on('send_message', async (data) => {
-      const { chatId, message } = data;
+      const { chatId, message, otherUserId } = data;
       
       if (!message?.trim()) {
         console.log('⚠️ Empty message received');
@@ -164,6 +204,19 @@ app.prepare().then(() => {
 
         // Broadcast to all in chat room
         io.to(`chat:${chatId}`).emit('new_message', newMessage);
+
+        // ✅ Emit notification ไปที่ other user
+        const otherUserSocketId = userSocketMap.get(otherUserId);
+        if (otherUserSocketId) {
+          io.to(otherUserSocketId).emit('new_message_notification', {
+            sender_id: socket.userId,
+            sender_name: socket.userName,
+            sender_image: socket.userImage,
+            message: message.trim(),
+            chatId: chatId,
+            timestamp: new Date()
+          });
+        }
 
         // Update last message
         await client.query(
@@ -219,8 +272,13 @@ app.prepare().then(() => {
       }
     });
 
+    // Disconnect handler
     socket.on('disconnect', () => {
       console.log('❌ User disconnected:', socket.userName);
+      
+      // ✅ ลบ user จาก map
+      userSocketMap.delete(socket.userId);
+      
       socket.broadcast.emit('user_offline', { userId: socket.userId });
     });
 
