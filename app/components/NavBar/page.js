@@ -15,37 +15,34 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const notificationRef = useRef(null);
   const messageRef = useRef(null);
   const profileRef = useRef(null);
-  
-  // ✅ Use refs to track UI state in socket handlers
   const showMessagesRef = useRef(false);
 
-  // ✅ Update ref whenever showMessages changes
   useEffect(() => {
     showMessagesRef.current = showMessages;
   }, [showMessages]);
 
-  // ✅ Load user data on mount
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
       try {
-        setUser(JSON.parse(userData));
+        const parsed = JSON.parse(userData);
+        setUser(parsed);
+        console.log('👤 User loaded:', parsed.id);
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
     }
   }, []);
 
-  // ✅ Load chats on mount
   useEffect(() => {
     fetchChats();
   }, []);
 
-  // ✅ Handle click outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
@@ -63,118 +60,153 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ✅ Play notification sound
-  const playNotificationSound = useCallback(() => {
-    const audio = new Audio('/notification.mp3');
-    audio.play().catch(err => console.log('Could not play notification sound:', err));
-  }, []);
+  const playNotificationSound = () => {
+    try {
+      const soundUrls = [
+        '/notification.mp3',
+        '/notification.wav',
+        '/notification.m4a'
+      ];
+      
+      const audio = new Audio();
+      audio.volume = 1;
+      audio.src = soundUrls[0];
+      const playPromise = audio.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => console.log('🔊 Sound played successfully'))
+          .catch(err => {
+            console.log('⚠️ Sound play blocked:', err);
+            document.addEventListener('click', () => {
+              audio.play().catch(() => {});
+            }, { once: true });
+          });
+      }
+    } catch (err) {
+      console.log('Could not play notification sound:', err);
+    }
+  };
 
-  // ✅ Socket event listeners - NO showMessages in dependency
+  // ✅ Socket Event Handlers - แก้ไขให้รองรับ Real-time Read
   useEffect(() => {
     if (!socket || !connected) return;
 
     console.log('🔌 Setting up socket listeners...');
 
-    // ✅ New message handler
     const handleNewMessage = (data) => {
       console.log('💬 New message received:', data);
-      console.log('📊 showMessagesRef.current:', showMessagesRef.current);
       
-      // ✅ Support multiple data formats
       const chatId = data.chatId || data.chat_id || data.id;
       const messageText = data.message || data.text || data.content || 'ไม่มีข้อความ';
+      const senderId = data.senderId || data.sender_id;
 
       if (!chatId) {
         console.warn('⚠️ No chatId in message data:', data);
         return;
       }
 
-      // ✅ Check dropdown state from ref (not closure)
+      const isOwnMessage = user?.id && senderId && Number(user.id) === Number(senderId);
+      console.log('👤 Sender:', senderId, 'Current user:', user?.id, 'Is own:', isOwnMessage);
+
+      if (isOwnMessage) {
+        console.log('⏭️ Skipping own message');
+        return;
+      }
+
+      playNotificationSound();
+
       const dropdownOpen = showMessagesRef.current;
-      console.log('🔍 Dropdown open:', dropdownOpen, '| shouldIncrement:', !dropdownOpen);
+      console.log('🔍 Dropdown open:', dropdownOpen);
 
       setMessages(prev => {
         const updated = [...prev];
         const idx = updated.findIndex(m => m.chatId === chatId);
-        console.log('🔎 Found chat at index:', idx, '| Total chats:', updated.length);
 
         if (idx !== -1) {
-          // ✅ เพิ่ม unread เฉพาะเมื่อ dropdown ปิด
-          const shouldIncrement = !dropdownOpen;
-          
-          // Update existing chat and move to top
           updated[idx] = {
             ...updated[idx],
             lastMessage: messageText,
             time: 'เมื่อสักครู่',
-            unread: shouldIncrement ? (updated[idx].unread || 0) + 1 : (updated[idx].unread || 0)
+            unread: (updated[idx].unread || 0) + 1
           };
 
-          // Move to top
           const [msg] = updated.splice(idx, 1);
           updated.unshift(msg);
           
-          console.log(`✅ Chat moved to top. Unread: ${updated[0].unread} (dropdown ${dropdownOpen ? 'open' : 'closed'})`);
+          console.log(`✅ Chat moved to top. Unread: ${updated[0].unread}`);
+          
+          const totalUnread = updated.reduce((sum, m) => sum + (m.unread || 0), 0);
+          setUnreadCount(totalUnread);
+          console.log('📈 Total unread:', totalUnread);
         } else {
-          // Fetch new chats if not found
           console.log('📥 Chat not found, fetching new chats...');
           fetchChats();
         }
 
         return updated;
       });
-
-      playNotificationSound();
     };
 
-    // ✅ Message read handler
+    // ✅ แก้ไข: Handler สำหรับ Real-time Read
     const handleMessageRead = (data) => {
-      console.log('📖 Messages read:', data);
+      console.log('📖 [Real-time] Messages read:', data);
       
       const chatId = data.chatId || data.chat_id || data.id;
-      if (chatId) {
-        setMessages(prev =>
-          prev.map(m =>
+      const readByUserId = Number(data.readBy || data.userId);
+      
+      // ✅ อัพเดทเฉพาะเมื่ออีกฝ่ายอ่านข้อความเรา (ไม่ใช่เราเอง)
+      if (chatId && user?.id && readByUserId !== Number(user.id)) {
+        setMessages(prev => {
+          const updated = prev.map(m =>
             m.chatId === chatId ? { ...m, unread: 0 } : m
-          )
-        );
+          );
+          
+          const totalUnread = updated.reduce((sum, m) => sum + (m.unread || 0), 0);
+          setUnreadCount(totalUnread);
+          console.log('📉 [Real-time] Unread decreased to:', totalUnread, 'for chat:', chatId);
+          
+          return updated;
+        });
+      } else {
+        console.log('ℹ️ Ignoring read event (own action or invalid data)');
       }
     };
 
-    // ✅ New friend request handler
     const handleNewFriendRequest = (data) => {
       console.log('🔔 New friend request:', data);
       setNotifications(prev => [data, ...prev]);
       playNotificationSound();
     };
 
-    // ✅ Subscribe to socket events
     socket.on('new_message', handleNewMessage);
     socket.on('new_message_notification', handleNewMessage);
     socket.on('messages_read', handleMessageRead);
+    socket.on('messages_read_realtime', handleMessageRead); // ✅ เพิ่ม backup event
     socket.on('new_friend_request', handleNewFriendRequest);
 
-    // ✅ Cleanup listeners - ONLY when socket changes
+    console.log('✅ All socket listeners registered');
+
     return () => {
       console.log('🧹 Cleaning up socket listeners...');
       socket.off('new_message', handleNewMessage);
       socket.off('new_message_notification', handleNewMessage);
       socket.off('messages_read', handleMessageRead);
+      socket.off('messages_read_realtime', handleMessageRead); // ✅ เพิ่ม cleanup
       socket.off('new_friend_request', handleNewFriendRequest);
     };
-  }, [socket, connected, playNotificationSound]); // ✅ REMOVED showMessages
+  }, [socket, connected, user?.id]); // ✅ เพิ่ม user?.id เป็น dependency
 
-  // ✅ Fetch friend requests
   useEffect(() => {
     if (showNotifications) {
       fetchPendingFriendRequests();
     }
   }, [showNotifications]);
 
-  // ✅ Fetch chats when dropdown opens
   useEffect(() => {
     if (showMessages) {
       fetchChats();
+      console.log('🔄 Refetching chats on dropdown open');
     }
   }, [showMessages]);
 
@@ -225,6 +257,10 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
           chatId: chat.id
         }));
         setMessages(formattedMessages);
+        
+        const totalUnread = formattedMessages.reduce((sum, m) => sum + (m.unread || 0), 0);
+        setUnreadCount(totalUnread);
+        console.log('📈 Initial unread count:', totalUnread);
       }
     } catch (err) {
       console.error('Error fetching chats:', err);
@@ -317,11 +353,15 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
     router.push(`/profile/${userId}`);
   };
 
+  // ✅ แก้ไขทั้งหมด: เพิ่ม Real-time Mark as Read
   const handleChatItemClick = async (message) => {
     setShowMessages(false);
+    
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/chats', {
+      
+      // 1. เปิด/สร้างแชท
+      const chatRes = await fetch('/api/chats', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -330,31 +370,93 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
         body: JSON.stringify({ otherUserId: message.id })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        
-        // ✅ Clear unread using chatId
-        setMessages(prev =>
-          prev.map(m =>
-            m.chatId === message.chatId ? { ...m, unread: 0 } : m
-          )
-        );
+      if (!chatRes.ok) {
+        console.error('❌ Failed to open chat');
+        return;
+      }
 
-        onChatOpen({
-          id: message.id,
-          chatId: data.chat.id,
-          name: message.name,
-          avatar: message.avatar,
-          online: message.online
+      const chatData = await chatRes.json();
+      const chatId = chatData.chat.id;
+
+      // 2. ✅ Mark messages as read ถ้ามี unread (อิงจาก DB)
+      if (message.unread > 0) {
+        console.log(`📖 Marking chat ${chatId} as read (${message.unread} messages)...`);
+        
+        try {
+          const readRes = await fetch(`/api/chats/${chatId}/read`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (readRes.ok) {
+            const readData = await readRes.json();
+            console.log(`✅ Marked ${readData.markedCount} messages as read in DB`);
+            
+            // 3. ✅ อัพเดท UI ทันที (Optimistic Update)
+            setMessages(prev => {
+              const updated = prev.map(m =>
+                m.chatId === message.chatId ? { ...m, unread: 0 } : m
+              );
+              
+              const totalUnread = updated.reduce((sum, m) => sum + (m.unread || 0), 0);
+              setUnreadCount(totalUnread);
+              console.log('📊 Total unread after mark read:', totalUnread);
+              
+              return updated;
+            });
+
+            // 4. ✅ ส่ง socket event เพื่อแจ้ง User อีกฝ่ายแบบ Real-time
+            if (socket && connected) {
+              socket.emit('mark_messages_read', { 
+                chatId: chatId,
+                userId: user?.id,
+                otherUserId: message.id
+              });
+              console.log('📤 Emitted mark_messages_read event to server');
+            } else {
+              console.warn('⚠️ Socket not connected, cannot emit read event');
+            }
+          } else {
+            console.error('❌ Failed to mark messages as read:', await readRes.text());
+          }
+        } catch (readErr) {
+          console.error('❌ Error marking messages as read:', readErr);
+        }
+      } else {
+        console.log('ℹ️ No unread messages to mark');
+        
+        // ✅ แม้ไม่มี unread ก็อัพเดท UI เพื่อความมั่นใจ
+        setMessages(prev => {
+          const updated = prev.map(m =>
+            m.chatId === message.chatId ? { ...m, unread: 0 } : m
+          );
+          
+          const totalUnread = updated.reduce((sum, m) => sum + (m.unread || 0), 0);
+          setUnreadCount(totalUnread);
+          
+          return updated;
         });
       }
+
+      // 5. เปิดหน้าแชท
+      onChatOpen({
+        id: message.id,
+        chatId: chatId,
+        name: message.name,
+        avatar: message.avatar,
+        online: message.online
+      });
+      
     } catch (err) {
-      console.error('Error opening chat:', err);
+      console.error('❌ Error in handleChatItemClick:', err);
     }
   };
 
   const unreadNotifications = notifications.length;
-  const unreadMessages = messages.reduce((sum, msg) => sum + msg.unread, 0);
+  const unreadMessages = unreadCount;
 
   return (
     <header className="bg-white shadow-sm border-b sticky top-0 z-50">
@@ -461,8 +563,8 @@ export default function NavBar({ onLogout, onChatOpen, onEditProfile }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 {unreadMessages > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
-                    {unreadMessages > 9 ? '9+' : unreadMessages}
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse">
+                    {unreadMessages > 99 ? '99+' : unreadMessages}
                   </span>
                 )}
               </button>
